@@ -3,7 +3,7 @@ name: lvms:run-integration-tests
 argument-hint: "[JIRA-ID]"
 description: Run LVMS QE integration tests on a TNF cluster via SSH — deploys operator from source, runs tests, parses results, posts to JIRA. Use for RC/EC builds where OLM catalog is unavailable.
 user-invocable: true
-allowed-tools: Bash, Read, AskUserQuestion
+allowed-tools: Bash, Read, AskUserQuestion, mcp__mcp-atlassian__jira_add_comment
 ---
 
 # lvms:run-integration-tests
@@ -41,7 +41,7 @@ Parse `$ARGUMENTS` for an optional JIRA ticket ID (e.g. `OCPEDGE-1995`).
 Ask for the hypervisor SSH host:
 
 ```
-Hypervisor SSH host? (default: ec2-user@52.29.221.136)
+Hypervisor SSH host? (e.g. ec2-user@<IP>)
 ```
 
 Set:
@@ -152,11 +152,16 @@ ssh "$SSH_HOST" "export KUBECONFIG=$KUBECONFIG; \
   done"
 ```
 
-Verify CSI driver — if `topolvm.io` is not listed, do not proceed (tests will silently skip everything):
+Verify CSI driver — if `topolvm.io` is not listed, stop immediately:
 
 ```bash
 ssh "$SSH_HOST" "export KUBECONFIG=$KUBECONFIG; oc get csidrivers | grep topolvm"
 ```
+
+**CRITICAL:** If `topolvm.io` is absent, stop and report:
+> CSI driver `topolvm.io` not registered. Check vg-manager logs:
+> `oc logs -n openshift-lvm-storage -l app.kubernetes.io/name=vg-manager`
+> Do not start tests — all cases will silently skip.
 
 ### Step 1d: Build test binary and start tests
 
@@ -224,9 +229,9 @@ Count completed tests from the partial log:
 
 ```bash
 ssh "$SSH_HOST" "python3 -c \"
-import json, sys
+import json, sys, os
 try:
-  raw = open('/root/lvms-mno.log').read()
+  raw = open(os.path.expanduser('~/lvms-mno.log')).read()
   # partial JSON — count result fields
   passed = raw.count('\"result\": \"passed\"')
   failed = raw.count('\"result\": \"failed\"')
@@ -265,7 +270,7 @@ For each log file, use Python to parse the OTE JSON output (the log is a JSON ar
 ```bash
 ssh "$SSH_HOST" "python3 -c \"
 import json, re
-raw = open('/root/lvms-<suite>.log').read()
+raw = open(os.path.expanduser('~/lvms-<suite>.log')).read()
 data = json.loads(raw[:raw.rfind(']')+1])
 passed = [t for t in data if t['result'] == 'passed']
 failed = [t for t in data if t['result'] == 'failed']

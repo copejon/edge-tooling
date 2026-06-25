@@ -69,6 +69,8 @@ LVMS (Logical Volume Manager Storage) release, QE, and operational workflows.
 - `skopeo` (for z-stream report registry queries)
 - Jira credentials (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`) for z-stream report
 - Python 3 with PyYAML (for must-gather analysis)
+- Go 1.24+ on the hypervisor (for `run-integration-tests`)
+- TNF cluster with extra disks and SSH-accessible hypervisor (for `run-integration-tests`)
 - **Category:** operator
 
 ## Author
