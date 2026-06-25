@@ -17,6 +17,7 @@ LVMS (Logical Volume Manager Storage) release, QE, and operational workflows.
 | `/lvms:check-release-readiness` | Verify branches, dependencies, and configuration for an LVMS release |
 | `/lvms:z-stream-report` | Generate z-stream release urgency report for all supported versions |
 | `/lvms:setup-prereq` | Set up prerequisites to test unreleased LVMS operator builds |
+| `/lvms:run-integration-tests` | Run QE integration tests from lvm-operator repo — deploy from source, run, collect results, post to JIRA |
 
 ## Usage
 
@@ -51,6 +52,13 @@ LVMS (Logical Volume Manager Storage) release, QE, and operational workflows.
 ```text
 /lvms:setup-prereq connected
 /lvms:setup-prereq disconnected
+```
+
+### Run integration tests (RC/EC builds)
+
+```text
+/lvms:run-integration-tests
+/lvms:run-integration-tests OCPEDGE-1995
 ```
 
 ## Requirements
