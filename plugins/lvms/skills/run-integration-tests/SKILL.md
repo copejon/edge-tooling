@@ -40,12 +40,13 @@ Parse `$ARGUMENTS` for an optional JIRA ticket ID (e.g. `OCPEDGE-1995`).
 
 Ask for the hypervisor SSH host:
 
-```
+```text
 Hypervisor SSH host? (e.g. ec2-user@<IP>)
 ```
 
 Set:
-```
+
+```text
 SSH_HOST = user input or default
 KUBECONFIG = /home/ec2-user/openshift-metal3/dev-scripts/ocp/ostest/auth/kubeconfig
 ```
@@ -73,7 +74,7 @@ ssh "$SSH_HOST" '
 
 ### Step 1a: Ask for suite
 
-```
+```text
 Which test suite?
 - mno: Multi-Node OpenShift (36 tests) — use for TNF clusters
 - sno: Single-Node OpenShift (30 tests) — use for SNO clusters
@@ -206,7 +207,7 @@ ssh "$SSH_HOST" '
 
 ### Step 1e: Exit with monitoring instructions
 
-```
+```text
 Tests started on <SSH_HOST> (PID above). Suite: <SUITE> — ~1-2 hours per suite.
 
 The OTE framework buffers output per-test, so the log stays empty while tests run.
@@ -241,7 +242,8 @@ except: print('log not yet written')
 ```
 
 Report to the user:
-```
+
+```text
 Tests still running on <SSH_HOST>.
 Progress: X passed, Y failed so far.
 
@@ -328,7 +330,8 @@ Use **PASS** if pass rate ≥ 90% and no unexpected failures. Use **BLOCKED** ot
 ### Step 3e: Post to JIRA
 
 If a JIRA ticket was provided (from `$ARGUMENTS`), ask before posting:
-```
+
+```text
 Post results to <JIRA-ID>? (yes/no)
 ```
 
@@ -339,6 +342,7 @@ If yes, post using the `mcp__mcp-atlassian__jira_add_comment` MCP tool.
 Ask: "Remove log files from the hypervisor? (yes/no)"
 
 If yes:
+
 ```bash
 ssh "$SSH_HOST" "rm -f ~/lvms-mno.log ~/lvms-sno.log"
 ```
