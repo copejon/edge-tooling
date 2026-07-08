@@ -237,7 +237,7 @@ try:
   passed = raw.count('\"result\": \"passed\"')
   failed = raw.count('\"result\": \"failed\"')
   print(f'passed: {passed}, failed: {failed}')
-except: print('log not yet written')
+except FileNotFoundError: print('log not yet written')
 \" 2>/dev/null || echo 'log not yet written'"
 ```
 
@@ -271,7 +271,7 @@ For each log file, use Python to parse the OTE JSON output (the log is a JSON ar
 
 ```bash
 ssh "$SSH_HOST" "python3 -c \"
-import json, re
+import json, re, os
 raw = open(os.path.expanduser('~/lvms-<suite>.log')).read()
 data = json.loads(raw[:raw.rfind(']')+1])
 passed = [t for t in data if t['result'] == 'passed']
