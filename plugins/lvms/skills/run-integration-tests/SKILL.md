@@ -91,7 +91,7 @@ ssh "$SSH_HOST" "export KUBECONFIG=$KUBECONFIG; \
 ```
 
 - **Found**: Ask: "LVMS already deployed. Redeploy from source or skip to test run?"
-  - Redeploy: `ssh "$SSH_HOST" "cd ~/lvm-operator && make undeploy"` then continue
+  - Redeploy: `ssh "$SSH_HOST" "cd ~/lvm-operator && make undeploy"` then continue to Step 1c
   - Skip: jump to Step 1d
 - **Not found**: Continue
 
@@ -150,7 +150,8 @@ ssh "$SSH_HOST" "export KUBECONFIG=$KUBECONFIG; \
     echo \"[\$i] \$STATE\"
     [ \"\$STATE\" = \"Ready\" ] && break
     sleep 10
-  done"
+  done
+  [ \"\$STATE\" = \"Ready\" ] || { echo 'LVMCluster not Ready after 3m'; exit 1; }"
 ```
 
 Verify CSI driver — if `topolvm.io` is not listed, stop immediately:
@@ -232,7 +233,7 @@ Count completed tests from the partial log:
 ssh "$SSH_HOST" "python3 -c \"
 import json, sys, os
 try:
-  raw = open(os.path.expanduser('~/lvms-mno.log')).read()
+  raw = open(os.path.expanduser('~/lvms-<suite>.log')).read()
   # partial JSON — count result fields
   passed = raw.count('\"result\": \"passed\"')
   failed = raw.count('\"result\": \"failed\"')
@@ -280,7 +281,9 @@ print(f'TOTAL:{len(data)} PASSED:{len(passed)} FAILED:{len(failed)}')
 for t in failed:
     m = re.search(r'-(\d{5,})-', t['name'])
     tid = f'OCP-{m.group(1)}' if m else 'unknown'
-    print(f'FAIL|{tid}|{t[\"name\"][:80]}|{t.get(\"output\",\"\").strip().splitlines()[-1][:120]}')
+    output_lines = t.get(\"output\", \"\").strip().splitlines()
+    last_line = output_lines[-1] if output_lines else \"no output\"
+    print(f'FAIL|{tid}|{t[\"name\"][:80]}|{last_line[:120]}')
 \""
 ```
 
