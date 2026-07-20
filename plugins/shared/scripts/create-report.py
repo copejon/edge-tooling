@@ -292,6 +292,26 @@ function toggleSideBySide(on) {
         }
     });
 }
+document.addEventListener('click', function(e) {
+    var link = e.target.closest('a.issue-ref');
+    if (!link) return;
+    var sec = link.closest('.release-section');
+    if (!sec || !sec.classList.contains('side-by-side')) return;
+    e.preventDefault();
+    var id = link.getAttribute('href').substring(1);
+    var row = document.getElementById(id);
+    if (!row) return;
+    var title = row.querySelector('.col-title');
+    var detail = row.nextElementSibling;
+    if (!detail || !detail.classList.contains('detail-row')) return;
+    if (!detail.classList.contains('show')) {
+        if (title) title.classList.add('active');
+        detail.classList.add('show');
+    } else {
+        if (title) title.classList.remove('active');
+        detail.classList.remove('show');
+    }
+});
 function filterLatestImages(on) {
     document.querySelectorAll('#tab-images .data-table tbody tr').forEach(function(row) {
         row.style.display = (!on || row.hasAttribute('data-latest')) ? '' : 'none';
@@ -1448,7 +1468,7 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
                 items = []
                 for anchor, title in sj_issues:
                     short = _e(title[:60] + ("..." if len(title) > 60 else ""))
-                    items.append(f'<li><a href="#{anchor}" title="{_e(title)}">{short}</a></li>')
+                    items.append(f'<li><a href="#{anchor}" class="issue-ref" title="{_e(title)}">{short}</a></li>')
                 issues_cell = f'<ul style="margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px">{"".join(items)}</ul>'
             else:
                 issues_cell = ""
