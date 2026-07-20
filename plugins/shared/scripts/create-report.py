@@ -377,7 +377,7 @@ def discover_files(workdir, releases):
     bugs_dir = os.path.join(workdir, "bugs")
 
     for version in releases:
-        entry = {"summary": None, "bugs": None, "jobs": None, "error": None}
+        entry = {"summary": None, "bugs": None, "jobs": None, "status": None, "error": None}
         path = os.path.join(jobs_dir, f"release-{version}-summary.json")
         if os.path.exists(path):
             entry["summary"] = path
@@ -387,6 +387,9 @@ def discover_files(workdir, releases):
         path = os.path.join(jobs_dir, f"release-{version}-jobs.json")
         if os.path.exists(path):
             entry["jobs"] = path
+        path = os.path.join(jobs_dir, f"release-{version}-status.json")
+        if os.path.exists(path):
+            entry["status"] = path
         path = os.path.join(jobs_dir, f"release-{version}-error.txt")
         if os.path.exists(path):
             with open(path) as f:
@@ -1590,25 +1593,119 @@ def render_pr_section(pr_data, bug_candidates, pr_status, pr_error=None, jira_cf
     return "\n".join(toc_lines) + "\n\n" + "\n".join(lines)
 
 
-def generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error=None, bugs_tab_data=None, images_tab_data=None, index_data=None, jira_cfg=None):
+def _format_epoch(epoch_str):
+    try:
+        return datetime.fromtimestamp(int(epoch_str), tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError, OSError):
+        return str(epoch_str or "")
+
+
+def _format_duration(dur_str):
+    try:
+        secs = int(float(dur_str))
+        if secs >= 3600:
+            return f"{secs // 3600}h {(secs % 3600) // 60}m"
+        return f"{secs // 60}m {secs % 60}s"
+    except (ValueError, TypeError):
+        return str(dur_str or "")
+
+
+def render_all_jobs_summary(status_data, releases):
+    if not status_data or not any(status_data.get(v) for v in releases):
+        return ""
+
+    lines = []
+    lines.append('        <div class="release-section" id="all-jobs-status">')
+    lines.append('            <div class="release-header">')
+    lines.append('                <h2>Periodic Job Status</h2>')
+    lines.append('            </div>')
+
+    for version in releases:
+        jobs = status_data.get(version)
+        if not jobs:
+            continue
+
+        total = len(jobs)
+        passed = sum(1 for j in jobs if j.get("status") == "success")
+        failed = sum(1 for j in jobs if j.get("status") == "failure")
+        other = total - passed - failed
+        rate = round(passed / total * 100) if total > 0 else 0
+
+        rate_css = "status-pass" if rate >= 90 else ("status-fail" if rate < 70 else "")
+
+        lines.append(f'            <h3>Release {_e(version)} &mdash; '
+                     f'<span class="{rate_css}">{passed}/{total} passed ({rate}%)</span>'
+                     f'{f", {other} pending/other" if other else ""}</h3>')
+
+        lines.append(f'            <table class="data-table">')
+        lines.append('            <thead><tr>')
+        lines.append('                <th>Status</th><th>Job Name</th><th>Finished</th><th>Duration</th>')
+        lines.append('            </tr></thead>')
+        lines.append('            <tbody>')
+
+        sorted_jobs = sorted(jobs, key=lambda j: (0 if j.get("status") == "failure" else 1, j.get("job", "")))
+        for job in sorted_jobs:
+            status = job.get("status", "unknown")
+            if status == "success":
+                status_badge = '<span class="severity-badge severity-low" style="background:#d4edda;color:#155724">PASS</span>'
+            elif status == "failure":
+                status_badge = '<span class="severity-badge severity-high">FAIL</span>'
+            else:
+                status_badge = f'<span class="severity-badge" style="background:#e2e3e5;color:#383d41">{_e(status.upper())}</span>'
+
+            job_name = _e(job.get("job", ""))
+            url = job.get("url", "")
+            job_cell = f'<a href="{_e(url)}" target="_blank">{job_name}</a>' if url else job_name
+
+            finished = _e(_format_epoch(job.get("finished")))
+            duration = _e(_format_duration(job.get("duration")))
+
+            lines.append('            <tr>')
+            lines.append(f'                <td>{status_badge}</td>')
+            lines.append(f'                <td>{job_cell}</td>')
+            lines.append(f'                <td>{finished}</td>')
+            lines.append(f'                <td>{duration}</td>')
+            lines.append('            </tr>')
+
+        lines.append('            </tbody>')
+        lines.append('            </table>')
+
+    lines.append('        </div>')
+    return "\n".join(lines)
+
+
+def generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error=None, bugs_tab_data=None, images_tab_data=None, index_data=None, jira_cfg=None, status_data=None):
     date_str = timestamp.strftime("%Y-%m-%d")
     time_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
     cards = []
     for version, rdata in releases_data.items():
+        status = (status_data or {}).get(version)
         if rdata and rdata.get("collection_error"):
             count = "!"
             css = "status-fail"
+            subtitle = ""
         elif rdata:
-            count = rdata["total_failed"]
-            css = "status-fail" if rdata["total_failed"] > 0 else "status-pass"
+            failed = rdata["total_failed"]
+            if status:
+                total = len(status)
+                passed = sum(1 for j in status if j.get("status") == "success")
+                count = f'{failed}<span style="font-size:0.5em;font-weight:400;color:#6c757d">/{total}</span>'
+                rate = round(passed / total * 100) if total > 0 else 0
+                subtitle = f'<div style="font-size:0.8em;color:#6c757d">{rate}% pass rate</div>'
+            else:
+                count = failed
+                subtitle = ""
+            css = "status-fail" if failed > 0 else "status-pass"
         else:
             count = "?"
             css = ""
+            subtitle = ""
         cards.append(
             '        <div class="overview-card">\n'
             f'            <div class="number {css}">{count}</div>\n'
             f'            <div class="label">Release {_e(version)}</div>\n'
+            f'            {subtitle}\n'
             "        </div>"
         )
     # PR overview: count failures from status (all PRs) or analysis
@@ -1633,17 +1730,24 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
 
     toc = []
     for version, rdata in releases_data.items():
+        status = (status_data or {}).get(version)
         if rdata and rdata.get("collection_error"):
             toc.append(
                 f'                <li><a href="#release-{_e(version)}">Release {_e(version)}</a> &mdash; collection error</li>'
             )
         elif rdata:
             b = rdata["breakdown"]
+            pass_info = ""
+            if status:
+                total = len(status)
+                passed = sum(1 for j in status if j.get("status") == "success")
+                rate = round(passed / total * 100) if total > 0 else 0
+                pass_info = f" &mdash; {passed}/{total} passed ({rate}%)"
             toc.append(
                 f'                <li><a href="#release-{_e(version)}">Release {_e(version)}</a> &mdash; '
                 f'<span class="toc-counts" data-release="{_e(version)}">'
                 f'{rdata["total_failed"]} failures ({b["build"]} build, {b["test"]} test, {b["infrastructure"]} infra)'
-                f'</span></li>'
+                f'{pass_info}</span></li>'
             )
         else:
             toc.append(f'                <li><a href="#release-{_e(version)}">Release {_e(version)}</a> &mdash; no data</li>')
@@ -1652,6 +1756,8 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
     _idx = index_data or {}
     for version, rdata in releases_data.items():
         sections.append(render_release_section(version, rdata, all_bug_candidates, _idx.get(version), jira_cfg))
+
+    all_jobs_summary = render_all_jobs_summary(status_data, list(releases_data.keys()))
 
     pr_section = render_pr_section(pr_data, all_bug_candidates, pr_status, pr_error, jira_cfg)
     bugs_section = render_bugs_section(bugs_tab_data) if bugs_tab_data else ""
@@ -1694,6 +1800,8 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
 {chr(10).join(toc)}
             </ul>
         </div>
+
+{all_jobs_summary}
 
 {chr(10).join(sections)}
     </div>
@@ -1845,6 +1953,11 @@ def main():
         releases_data[version] = rdata
         bug_data[version] = load_bug_candidates(entry["bugs"])
 
+    status_data = {}
+    for version in releases:
+        entry = files["releases"][version]
+        status_data[version] = load_json(entry.get("status"))
+
     index_data = {}
     for version in releases:
         index_data[version] = extract_index_image(workdir, version)
@@ -1918,7 +2031,7 @@ def main():
 
     # Generate HTML
     timestamp = datetime.now(timezone.utc)
-    html_content = generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error, bugs_tab_data, images_tab_data, index_data, COMPONENT_JIRA_CREATE.get(component))
+    html_content = generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error, bugs_tab_data, images_tab_data, index_data, COMPONENT_JIRA_CREATE.get(component), status_data=status_data)
 
     output_path = os.path.join(workdir, f"report-{component}-ci-doctor.html")
     with open(output_path, "w") as f:
@@ -1929,10 +2042,17 @@ def main():
     print("  Periodics:")
     for version in releases:
         rdata = releases_data[version]
+        status = status_data.get(version)
         if rdata and rdata.get("collection_error"):
             print(f"    Release {version}: ERROR - data collection failed")
         elif rdata:
-            print(f"    Release {version}: {rdata['total_failed']} failed periodic jobs")
+            extra = ""
+            if status:
+                total = len(status)
+                passed = sum(1 for j in status if j.get("status") == "success")
+                rate = round(passed / total * 100) if total > 0 else 0
+                extra = f" ({passed}/{total} passed, {rate}% pass rate)"
+            print(f"    Release {version}: {rdata['total_failed']} failed periodic jobs{extra}")
         else:
             print(f"    Release {version}: no data")
     print("  Pull Requests:")
