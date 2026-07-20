@@ -188,7 +188,12 @@ CSS = """\
         .grade-f { background: #721c24; color: #fff; }
         .grade-na { background: #e2e3e5; color: #383d41; }
         .index-image-info { background: #e8f4fd; border-left: 3px solid #0366d6; padding: 8px 12px; margin: 8px 0; font-size: 0.9em; }
-        .index-image-info code { background: #f1f1f1; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }"""
+        .index-image-info code { background: #f1f1f1; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }
+        .section-toggle { margin: 12px 0; }
+        .section-toggle summary { font-size: 1.05em; font-weight: 600; cursor: pointer; padding: 6px 0; user-select: none; list-style: none; }
+        .section-toggle summary::before { content: '\\25B6  '; font-size: 0.8em; color: #6c757d; }
+        .section-toggle[open] summary::before { content: '\\25BC  '; }
+        .section-toggle summary::-webkit-details-marker { display: none; }"""
 
 JS = """\
 function showTab(e, name) {
@@ -1393,7 +1398,8 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
         passed_s = sum(1 for j in release_status if j.get("status") == "success")
         rate_s = round(passed_s / total_s * 100) if total_s > 0 else 0
         rate_css = "status-pass" if rate_s >= 90 else ("status-fail" if rate_s < 70 else "")
-        lines.append(f'            <h3>All Jobs &mdash; <span class="{rate_css}">{passed_s}/{total_s} passed ({rate_s}%)</span></h3>')
+        lines.append('            <details class="section-toggle">')
+        lines.append(f'            <summary>All Jobs &mdash; <span class="{rate_css}">{passed_s}/{total_s} passed ({rate_s}%)</span></summary>')
         lines.append('            <table class="data-table">')
         lines.append('            <thead><tr>')
         lines.append('                <th>Status</th><th>Job Name</th><th>Finished</th><th>Duration</th><th>Issues</th>')
@@ -1433,9 +1439,11 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
             lines.append('            </tr>')
         lines.append('            </tbody>')
         lines.append('            </table>')
+        lines.append('            </details>')
 
     if rdata["issues"]:
-        lines.append('            <h3>Failure Analysis</h3>')
+        lines.append('            <details class="section-toggle">')
+        lines.append(f'            <summary>Failure Analysis &mdash; {total} {label}</summary>')
     lines.append('            <table class="issues-table">')
     for issue in rdata["issues"]:
         bug_match = match_issue_to_bugs(issue["title"], bug_candidates)
@@ -1473,6 +1481,8 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
             lines.append(f"                <p><em>Next Steps:</em> {_e(issue['next_steps'])}</p>")
         lines.append("            </td></tr>")
     lines.append('            </table>')
+    if rdata["issues"]:
+        lines.append('            </details>')
 
     lines.append("        </div>")
     return "\n".join(lines)
