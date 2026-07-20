@@ -67,7 +67,8 @@ _GRADE_CSS = {"A": "grade-a", "B": "grade-b", "C": "grade-c", "D": "grade-d", "F
 
 CSS = """\
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; color: #333; }
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; transition: max-width 0.2s; }
+        .container.wide { max-width: 1800px; }
         h1 { color: #1a1a2e; border-bottom: 3px solid #e94560; padding-bottom: 8px; font-size: 1.4em; margin: 10px 0; }
         h2 { font-size: 1.15em; margin: 0; }
         h3 { font-size: 1.05em; margin: 0 0 8px 0; }
@@ -113,7 +114,7 @@ CSS = """\
         .toc li { padding: 5px 0; }
         .toc a { color: #0366d6; text-decoration: none; }
         .toc a:hover { text-decoration: underline; }
-        .toc-header { display: flex; justify-content: space-between; align-items: center; }
+        .toc-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
         .filter-toggle { cursor: pointer; user-select: none; font-size: 0.9em; color: #6c757d; font-weight: 400; }
         .filter-toggle input[type="checkbox"] { margin-right: 5px; vertical-align: middle; }
         .timestamp { color: #6c757d; font-size: 0.9em; }
@@ -193,7 +194,10 @@ CSS = """\
         .section-toggle summary { font-size: 1.05em; font-weight: 600; cursor: pointer; padding: 6px 0; user-select: none; list-style: none; }
         .section-toggle summary::before { content: '\\25B6  '; font-size: 0.8em; color: #6c757d; }
         .section-toggle[open] summary::before { content: '\\25BC  '; }
-        .section-toggle summary::-webkit-details-marker { display: none; }"""
+        .section-toggle summary::-webkit-details-marker { display: none; }
+        .release-section.side-by-side .section-panels { display: flex; gap: 20px; }
+        .release-section.side-by-side .section-panels > .section-toggle { flex: 1; min-width: 0; }
+        @media (max-width: 1200px) { .release-section.side-by-side .section-panels { flex-direction: column; } }"""
 
 JS = """\
 function showTab(e, name) {
@@ -276,6 +280,16 @@ function filterToday(on) {
         if (bdb) bdb.textContent = bd.build;
         if (bdt) bdt.textContent = bd.test;
         if (bdi) bdi.textContent = bd.infra;
+    });
+}
+function toggleSideBySide(on) {
+    document.querySelector('.container').classList.toggle('wide', on);
+    document.querySelectorAll('#tab-periodics .release-section').forEach(function(sec) {
+        sec.classList.toggle('side-by-side', on);
+        var toggles = sec.querySelectorAll('.section-toggle');
+        if (on) {
+            toggles.forEach(function(d) { d.open = true; });
+        }
     });
 }
 function filterLatestImages(on) {
@@ -1392,6 +1406,8 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
     lines.append(f'                <span class="breakdown-item"><strong class="bd-infra">{b["infrastructure"]}</strong> Infrastructure</span>')
     lines.append("            </div>")
 
+    lines.append('            <div class="section-panels">')
+
     if release_status:
         _jim = job_issue_map or {}
         total_s = len(release_status)
@@ -1405,7 +1421,7 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
         lines.append('                <th>Status</th><th>Job Name</th><th>Finished</th><th>Duration</th><th>Issues</th>')
         lines.append('            </tr></thead>')
         lines.append('            <tbody>')
-        sorted_status = sorted(release_status, key=lambda j: (0 if j.get("status") == "failure" else 1, j.get("job", "")))
+        sorted_status = sorted(release_status, key=lambda j: j.get("finished") or "")
         for sj in sorted_status:
             st = sj.get("status", "unknown")
             if st == "success":
@@ -1427,7 +1443,7 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
                 for anchor, title in sj_issues:
                     short = _e(title[:60] + ("..." if len(title) > 60 else ""))
                     items.append(f'<li><a href="#{anchor}" title="{_e(title)}">{short}</a></li>')
-                issues_cell = f'<ul style="margin:0;padding-left:1.2em">{"".join(items)}</ul>'
+                issues_cell = f'<ul style="margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px">{"".join(items)}</ul>'
             else:
                 issues_cell = ""
             lines.append('            <tr>')
@@ -1483,6 +1499,8 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
     lines.append('            </table>')
     if rdata["issues"]:
         lines.append('            </details>')
+
+    lines.append('            </div>')  # section-panels
 
     lines.append("        </div>")
     return "\n".join(lines)
@@ -1808,6 +1826,7 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
             <div class="toc-header">
                 <h3>Table of Contents</h3>
                 <label class="filter-toggle"><input type="checkbox" id="filter-today" onchange="filterToday(this.checked)"> Today only</label>
+                <label class="filter-toggle"><input type="checkbox" id="toggle-side-by-side" onchange="toggleSideBySide(this.checked)"> Side by side</label>
             </div>
             <ul>
 {chr(10).join(toc)}
