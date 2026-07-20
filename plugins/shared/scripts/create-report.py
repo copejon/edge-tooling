@@ -1610,7 +1610,23 @@ def _format_duration(dur_str):
         return str(dur_str or "")
 
 
-def render_all_jobs_summary(status_data, releases):
+def _build_job_issue_map(releases_data):
+    """Map job name → list of (anchor_id, issue_title) for linking status rows to issues."""
+    result = {}
+    for version, rdata in releases_data.items():
+        if not rdata or not rdata.get("issues"):
+            continue
+        for issue in rdata["issues"]:
+            anchor = f'release-{_e(version)}-{issue["number"]}'
+            title = issue.get("title", "")
+            for job in issue.get("affected_jobs", []):
+                name = job.get("name", "")
+                if name:
+                    result.setdefault(name, []).append((anchor, title))
+    return result
+
+
+def render_all_jobs_summary(status_data, releases, job_issue_map):
     if not status_data or not any(status_data.get(v) for v in releases):
         return ""
 
@@ -1639,7 +1655,7 @@ def render_all_jobs_summary(status_data, releases):
 
         lines.append(f'            <table class="data-table">')
         lines.append('            <thead><tr>')
-        lines.append('                <th>Status</th><th>Job Name</th><th>Finished</th><th>Duration</th>')
+        lines.append('                <th>Status</th><th>Job Name</th><th>Finished</th><th>Duration</th><th>Issues</th>')
         lines.append('            </tr></thead>')
         lines.append('            <tbody>')
 
@@ -1650,6 +1666,8 @@ def render_all_jobs_summary(status_data, releases):
                 status_badge = '<span class="severity-badge severity-low" style="background:#d4edda;color:#155724">PASS</span>'
             elif status == "failure":
                 status_badge = '<span class="severity-badge severity-high">FAIL</span>'
+            elif status == "pending":
+                status_badge = '<span class="severity-badge" style="background:#cce5ff;color:#004085">RUNNING</span>'
             else:
                 status_badge = f'<span class="severity-badge" style="background:#e2e3e5;color:#383d41">{_e(status.upper())}</span>'
 
@@ -1660,11 +1678,22 @@ def render_all_jobs_summary(status_data, releases):
             finished = _e(_format_epoch(job.get("finished")))
             duration = _e(_format_duration(job.get("duration")))
 
+            issue_links = job_issue_map.get(job.get("job", ""), [])
+            if issue_links:
+                issue_items = []
+                for anchor, title in issue_links:
+                    short = _e(title[:60] + ("..." if len(title) > 60 else ""))
+                    issue_items.append(f'<li><a href="#{anchor}" title="{_e(title)}">{short}</a></li>')
+                issues_cell = f'<ul style="margin:0;padding-left:1.2em">{"".join(issue_items)}</ul>'
+            else:
+                issues_cell = ""
+
             lines.append('            <tr>')
             lines.append(f'                <td>{status_badge}</td>')
             lines.append(f'                <td>{job_cell}</td>')
             lines.append(f'                <td>{finished}</td>')
             lines.append(f'                <td>{duration}</td>')
+            lines.append(f'                <td style="font-size:0.85em">{issues_cell}</td>')
             lines.append('            </tr>')
 
         lines.append('            </tbody>')
@@ -1757,7 +1786,8 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
     for version, rdata in releases_data.items():
         sections.append(render_release_section(version, rdata, all_bug_candidates, _idx.get(version), jira_cfg))
 
-    all_jobs_summary = render_all_jobs_summary(status_data, list(releases_data.keys()))
+    job_issue_map = _build_job_issue_map(releases_data)
+    all_jobs_summary = render_all_jobs_summary(status_data, list(releases_data.keys()), job_issue_map)
 
     pr_section = render_pr_section(pr_data, all_bug_candidates, pr_status, pr_error, jira_cfg)
     bugs_section = render_bugs_section(bugs_tab_data) if bugs_tab_data else ""
