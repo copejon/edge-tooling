@@ -1341,7 +1341,7 @@ def _render_bug_links(bug_match, issue, source_label, jira_cfg=None):
 # HTML rendering
 # ---------------------------------------------------------------------------
 
-def render_release_section(version, rdata, bug_candidates, index_info=None, jira_cfg=None):
+def render_release_section(version, rdata, bug_candidates, index_info=None, jira_cfg=None, release_status=None, job_issue_map=None):
     if rdata is None:
         return (
             f'        <div class="release-section" id="release-{_e(version)}">\n'
@@ -1387,6 +1387,55 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
     lines.append(f'                <span class="breakdown-item"><strong class="bd-infra">{b["infrastructure"]}</strong> Infrastructure</span>')
     lines.append("            </div>")
 
+    if release_status:
+        _jim = job_issue_map or {}
+        total_s = len(release_status)
+        passed_s = sum(1 for j in release_status if j.get("status") == "success")
+        rate_s = round(passed_s / total_s * 100) if total_s > 0 else 0
+        rate_css = "status-pass" if rate_s >= 90 else ("status-fail" if rate_s < 70 else "")
+        lines.append(f'            <h3>All Jobs &mdash; <span class="{rate_css}">{passed_s}/{total_s} passed ({rate_s}%)</span></h3>')
+        lines.append('            <table class="data-table">')
+        lines.append('            <thead><tr>')
+        lines.append('                <th>Status</th><th>Job Name</th><th>Finished</th><th>Duration</th><th>Issues</th>')
+        lines.append('            </tr></thead>')
+        lines.append('            <tbody>')
+        sorted_status = sorted(release_status, key=lambda j: (0 if j.get("status") == "failure" else 1, j.get("job", "")))
+        for sj in sorted_status:
+            st = sj.get("status", "unknown")
+            if st == "success":
+                st_badge = '<span class="severity-badge severity-low" style="background:#d4edda;color:#155724">PASS</span>'
+            elif st == "failure":
+                st_badge = '<span class="severity-badge severity-high">FAIL</span>'
+            elif st == "pending":
+                st_badge = '<span class="severity-badge" style="background:#cce5ff;color:#004085">RUNNING</span>'
+            else:
+                st_badge = f'<span class="severity-badge" style="background:#e2e3e5;color:#383d41">{_e(st.upper())}</span>'
+            sj_name = _e(sj.get("job", ""))
+            sj_url = sj.get("url", "")
+            sj_cell = f'<a href="{_e(sj_url)}" target="_blank">{sj_name}</a>' if sj_url else sj_name
+            sj_finished = _e(_format_epoch(sj.get("finished")))
+            sj_duration = _e(_format_duration(sj.get("duration")))
+            sj_issues = _jim.get(sj.get("job", ""), [])
+            if sj_issues:
+                items = []
+                for anchor, title in sj_issues:
+                    short = _e(title[:60] + ("..." if len(title) > 60 else ""))
+                    items.append(f'<li><a href="#{anchor}" title="{_e(title)}">{short}</a></li>')
+                issues_cell = f'<ul style="margin:0;padding-left:1.2em">{"".join(items)}</ul>'
+            else:
+                issues_cell = ""
+            lines.append('            <tr>')
+            lines.append(f'                <td>{st_badge}</td>')
+            lines.append(f'                <td>{sj_cell}</td>')
+            lines.append(f'                <td>{sj_finished}</td>')
+            lines.append(f'                <td>{sj_duration}</td>')
+            lines.append(f'                <td style="font-size:0.85em">{issues_cell}</td>')
+            lines.append('            </tr>')
+        lines.append('            </tbody>')
+        lines.append('            </table>')
+
+    if rdata["issues"]:
+        lines.append('            <h3>Failure Analysis</h3>')
     lines.append('            <table class="issues-table">')
     for issue in rdata["issues"]:
         bug_match = match_issue_to_bugs(issue["title"], bug_candidates)
@@ -1626,82 +1675,6 @@ def _build_job_issue_map(releases_data):
     return result
 
 
-def render_all_jobs_summary(status_data, releases, job_issue_map):
-    if not status_data or not any(status_data.get(v) for v in releases):
-        return ""
-
-    lines = []
-    lines.append('        <div class="release-section" id="all-jobs-status">')
-    lines.append('            <div class="release-header">')
-    lines.append('                <h2>Periodic Job Status</h2>')
-    lines.append('            </div>')
-
-    for version in releases:
-        jobs = status_data.get(version)
-        if not jobs:
-            continue
-
-        total = len(jobs)
-        passed = sum(1 for j in jobs if j.get("status") == "success")
-        failed = sum(1 for j in jobs if j.get("status") == "failure")
-        other = total - passed - failed
-        rate = round(passed / total * 100) if total > 0 else 0
-
-        rate_css = "status-pass" if rate >= 90 else ("status-fail" if rate < 70 else "")
-
-        lines.append(f'            <h3>Release {_e(version)} &mdash; '
-                     f'<span class="{rate_css}">{passed}/{total} passed ({rate}%)</span>'
-                     f'{f", {other} pending/other" if other else ""}</h3>')
-
-        lines.append(f'            <table class="data-table">')
-        lines.append('            <thead><tr>')
-        lines.append('                <th>Status</th><th>Job Name</th><th>Finished</th><th>Duration</th><th>Issues</th>')
-        lines.append('            </tr></thead>')
-        lines.append('            <tbody>')
-
-        sorted_jobs = sorted(jobs, key=lambda j: (0 if j.get("status") == "failure" else 1, j.get("job", "")))
-        for job in sorted_jobs:
-            status = job.get("status", "unknown")
-            if status == "success":
-                status_badge = '<span class="severity-badge severity-low" style="background:#d4edda;color:#155724">PASS</span>'
-            elif status == "failure":
-                status_badge = '<span class="severity-badge severity-high">FAIL</span>'
-            elif status == "pending":
-                status_badge = '<span class="severity-badge" style="background:#cce5ff;color:#004085">RUNNING</span>'
-            else:
-                status_badge = f'<span class="severity-badge" style="background:#e2e3e5;color:#383d41">{_e(status.upper())}</span>'
-
-            job_name = _e(job.get("job", ""))
-            url = job.get("url", "")
-            job_cell = f'<a href="{_e(url)}" target="_blank">{job_name}</a>' if url else job_name
-
-            finished = _e(_format_epoch(job.get("finished")))
-            duration = _e(_format_duration(job.get("duration")))
-
-            issue_links = job_issue_map.get(job.get("job", ""), [])
-            if issue_links:
-                issue_items = []
-                for anchor, title in issue_links:
-                    short = _e(title[:60] + ("..." if len(title) > 60 else ""))
-                    issue_items.append(f'<li><a href="#{anchor}" title="{_e(title)}">{short}</a></li>')
-                issues_cell = f'<ul style="margin:0;padding-left:1.2em">{"".join(issue_items)}</ul>'
-            else:
-                issues_cell = ""
-
-            lines.append('            <tr>')
-            lines.append(f'                <td>{status_badge}</td>')
-            lines.append(f'                <td>{job_cell}</td>')
-            lines.append(f'                <td>{finished}</td>')
-            lines.append(f'                <td>{duration}</td>')
-            lines.append(f'                <td style="font-size:0.85em">{issues_cell}</td>')
-            lines.append('            </tr>')
-
-        lines.append('            </tbody>')
-        lines.append('            </table>')
-
-    lines.append('        </div>')
-    return "\n".join(lines)
-
 
 def generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error=None, bugs_tab_data=None, images_tab_data=None, index_data=None, jira_cfg=None, status_data=None):
     date_str = timestamp.strftime("%Y-%m-%d")
@@ -1781,13 +1754,13 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
         else:
             toc.append(f'                <li><a href="#release-{_e(version)}">Release {_e(version)}</a> &mdash; no data</li>')
 
+    job_issue_map = _build_job_issue_map(releases_data)
+
     sections = []
     _idx = index_data or {}
     for version, rdata in releases_data.items():
-        sections.append(render_release_section(version, rdata, all_bug_candidates, _idx.get(version), jira_cfg))
-
-    job_issue_map = _build_job_issue_map(releases_data)
-    all_jobs_summary = render_all_jobs_summary(status_data, list(releases_data.keys()), job_issue_map)
+        rs = (status_data or {}).get(version)
+        sections.append(render_release_section(version, rdata, all_bug_candidates, _idx.get(version), jira_cfg, release_status=rs, job_issue_map=job_issue_map))
 
     pr_section = render_pr_section(pr_data, all_bug_candidates, pr_status, pr_error, jira_cfg)
     bugs_section = render_bugs_section(bugs_tab_data) if bugs_tab_data else ""
@@ -1830,8 +1803,6 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
 {chr(10).join(toc)}
             </ul>
         </div>
-
-{all_jobs_summary}
 
 {chr(10).join(sections)}
     </div>
