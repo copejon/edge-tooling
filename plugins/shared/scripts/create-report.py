@@ -380,8 +380,14 @@ document.querySelectorAll('.data-table').forEach(function(table) {
             sortBy(colIdx, !th.classList.contains('sort-asc'));
         });
     });
-    // Sort by second-to-last column (e.g. "Updated" for bugs, "Image Created" for images) descending on load.
-    if (headers.length >= 2) sortBy(headers.length - 2, false);
+    // Default sort: use data-default-sort="col,asc" if present, otherwise second-to-last column descending.
+    var ds = table.getAttribute('data-default-sort');
+    if (ds) {
+        var parts = ds.split(',');
+        sortBy(parseInt(parts[0], 10), parts[1] === 'asc');
+    } else if (headers.length >= 2) {
+        sortBy(headers.length - 2, false);
+    }
 });"""
 
 
@@ -1416,7 +1422,7 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
         rate_css = "status-pass" if rate_s >= 90 else ("status-fail" if rate_s < 70 else "")
         lines.append('            <details class="section-toggle">')
         lines.append(f'            <summary>All Jobs &mdash; <span class="{rate_css}">{passed_s}/{total_s} passed ({rate_s}%)</span></summary>')
-        lines.append('            <table class="data-table">')
+        lines.append('            <table class="data-table" data-default-sort="2,asc">')
         lines.append('            <thead><tr>')
         lines.append('                <th>Status</th><th>Job Name</th><th>Finished</th><th>Duration</th><th>Issues</th>')
         lines.append('            </tr></thead>')
