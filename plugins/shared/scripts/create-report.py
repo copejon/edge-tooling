@@ -67,7 +67,8 @@ _GRADE_CSS = {"A": "grade-a", "B": "grade-b", "C": "grade-c", "D": "grade-d", "F
 
 CSS = """\
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; color: #333; }
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; transition: max-width 0.2s; }
+        .container.wide { max-width: 1800px; }
         h1 { color: #1a1a2e; border-bottom: 3px solid #e94560; padding-bottom: 8px; font-size: 1.4em; margin: 10px 0; }
         h2 { font-size: 1.15em; margin: 0; }
         h3 { font-size: 1.05em; margin: 0 0 8px 0; }
@@ -113,7 +114,7 @@ CSS = """\
         .toc li { padding: 5px 0; }
         .toc a { color: #0366d6; text-decoration: none; }
         .toc a:hover { text-decoration: underline; }
-        .toc-header { display: flex; justify-content: space-between; align-items: center; }
+        .toc-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
         .filter-toggle { cursor: pointer; user-select: none; font-size: 0.9em; color: #6c757d; font-weight: 400; }
         .filter-toggle input[type="checkbox"] { margin-right: 5px; vertical-align: middle; }
         .timestamp { color: #6c757d; font-size: 0.9em; }
@@ -188,7 +189,15 @@ CSS = """\
         .grade-f { background: #721c24; color: #fff; }
         .grade-na { background: #e2e3e5; color: #383d41; }
         .index-image-info { background: #e8f4fd; border-left: 3px solid #0366d6; padding: 8px 12px; margin: 8px 0; font-size: 0.9em; }
-        .index-image-info code { background: #f1f1f1; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }"""
+        .index-image-info code { background: #f1f1f1; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }
+        .section-toggle { margin: 12px 0; }
+        .section-toggle summary { font-size: 1.05em; font-weight: 600; cursor: pointer; padding: 6px 0; user-select: none; list-style: none; }
+        .section-toggle summary::before { content: '\\25B6  '; font-size: 0.8em; color: #6c757d; }
+        .section-toggle[open] summary::before { content: '\\25BC  '; }
+        .section-toggle summary::-webkit-details-marker { display: none; }
+        .release-section.side-by-side .section-panels { display: flex; gap: 20px; }
+        .release-section.side-by-side .section-panels > .section-toggle { flex: 1; min-width: 0; }
+        @media (max-width: 1200px) { .release-section.side-by-side .section-panels { flex-direction: column; } }"""
 
 JS = """\
 function showTab(e, name) {
@@ -273,6 +282,36 @@ function filterToday(on) {
         if (bdi) bdi.textContent = bd.infra;
     });
 }
+function toggleSideBySide(on) {
+    document.querySelector('.container').classList.toggle('wide', on);
+    document.querySelectorAll('#tab-periodics .release-section').forEach(function(sec) {
+        sec.classList.toggle('side-by-side', on);
+        var toggles = sec.querySelectorAll('.section-toggle');
+        if (on) {
+            toggles.forEach(function(d) { d.open = true; });
+        }
+    });
+}
+document.addEventListener('click', function(e) {
+    var link = e.target.closest('a.issue-ref');
+    if (!link) return;
+    var sec = link.closest('.release-section');
+    if (!sec || !sec.classList.contains('side-by-side')) return;
+    e.preventDefault();
+    var id = link.getAttribute('href').substring(1);
+    var row = document.getElementById(id);
+    if (!row) return;
+    var title = row.querySelector('.col-title');
+    var detail = row.nextElementSibling;
+    if (!detail || !detail.classList.contains('detail-row')) return;
+    if (!detail.classList.contains('show')) {
+        if (title) title.classList.add('active');
+        detail.classList.add('show');
+    } else {
+        if (title) title.classList.remove('active');
+        detail.classList.remove('show');
+    }
+});
 function filterLatestImages(on) {
     document.querySelectorAll('#tab-images .data-table tbody tr').forEach(function(row) {
         row.style.display = (!on || row.hasAttribute('data-latest')) ? '' : 'none';
@@ -361,8 +400,14 @@ document.querySelectorAll('.data-table').forEach(function(table) {
             sortBy(colIdx, !th.classList.contains('sort-asc'));
         });
     });
-    // Sort by second-to-last column (e.g. "Updated" for bugs, "Image Created" for images) descending on load.
-    if (headers.length >= 2) sortBy(headers.length - 2, false);
+    // Default sort: use data-default-sort="col,asc" if present, otherwise second-to-last column descending.
+    var ds = table.getAttribute('data-default-sort');
+    if (ds) {
+        var parts = ds.split(',');
+        sortBy(parseInt(parts[0], 10), parts[1] === 'asc');
+    } else if (headers.length >= 2) {
+        sortBy(headers.length - 2, false);
+    }
 });"""
 
 
@@ -377,7 +422,7 @@ def discover_files(workdir, releases):
     bugs_dir = os.path.join(workdir, "bugs")
 
     for version in releases:
-        entry = {"summary": None, "bugs": None, "jobs": None, "error": None}
+        entry = {"summary": None, "bugs": None, "jobs": None, "status": None, "error": None}
         path = os.path.join(jobs_dir, f"release-{version}-summary.json")
         if os.path.exists(path):
             entry["summary"] = path
@@ -387,6 +432,9 @@ def discover_files(workdir, releases):
         path = os.path.join(jobs_dir, f"release-{version}-jobs.json")
         if os.path.exists(path):
             entry["jobs"] = path
+        path = os.path.join(jobs_dir, f"release-{version}-status.json")
+        if os.path.exists(path):
+            entry["status"] = path
         path = os.path.join(jobs_dir, f"release-{version}-error.txt")
         if os.path.exists(path):
             with open(path) as f:
@@ -1338,7 +1386,7 @@ def _render_bug_links(bug_match, issue, source_label, jira_cfg=None):
 # HTML rendering
 # ---------------------------------------------------------------------------
 
-def render_release_section(version, rdata, bug_candidates, index_info=None, jira_cfg=None):
+def render_release_section(version, rdata, bug_candidates, index_info=None, jira_cfg=None, release_status=None, job_issue_map=None):
     if rdata is None:
         return (
             f'        <div class="release-section" id="release-{_e(version)}">\n'
@@ -1384,6 +1432,60 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
     lines.append(f'                <span class="breakdown-item"><strong class="bd-infra">{b["infrastructure"]}</strong> Infrastructure</span>')
     lines.append("            </div>")
 
+    lines.append('            <div class="section-panels">')
+
+    if release_status:
+        _jim = job_issue_map or {}
+        total_s = len(release_status)
+        passed_s = sum(1 for j in release_status if j.get("status") == "success")
+        rate_s = round(passed_s / total_s * 100) if total_s > 0 else 0
+        rate_css = "status-pass" if rate_s >= 90 else ("status-fail" if rate_s < 70 else "")
+        lines.append('            <details class="section-toggle">')
+        lines.append(f'            <summary>All Jobs &mdash; <span class="{rate_css}">{passed_s}/{total_s} passed ({rate_s}%)</span></summary>')
+        lines.append('            <table class="data-table" data-default-sort="2,asc">')
+        lines.append('            <thead><tr>')
+        lines.append('                <th>Status</th><th>Job Name</th><th>Finished</th><th>Duration</th><th>Issues</th>')
+        lines.append('            </tr></thead>')
+        lines.append('            <tbody>')
+        sorted_status = sorted(release_status, key=lambda j: j.get("finished") or "")
+        for sj in sorted_status:
+            st = sj.get("status", "unknown")
+            if st == "success":
+                st_badge = '<span class="severity-badge severity-low" style="background:#d4edda;color:#155724">PASS</span>'
+            elif st == "failure":
+                st_badge = '<span class="severity-badge severity-high">FAIL</span>'
+            elif st == "pending":
+                st_badge = '<span class="severity-badge" style="background:#cce5ff;color:#004085">RUNNING</span>'
+            else:
+                st_badge = f'<span class="severity-badge" style="background:#e2e3e5;color:#383d41">{_e(st.upper())}</span>'
+            sj_name = _e(sj.get("job", ""))
+            sj_url = sj.get("url", "")
+            sj_cell = f'<a href="{_e(sj_url)}" target="_blank">{sj_name}</a>' if sj_url else sj_name
+            sj_finished = _e(_format_epoch(sj.get("finished")))
+            sj_duration = _e(_format_duration(sj.get("duration")))
+            sj_issues = _jim.get(sj.get("job", ""), [])
+            if sj_issues:
+                items = []
+                for anchor, title in sj_issues:
+                    short = _e(title[:60] + ("..." if len(title) > 60 else ""))
+                    items.append(f'<li><a href="#{anchor}" class="issue-ref" title="{_e(title)}">{short}</a></li>')
+                issues_cell = f'<ul style="margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px">{"".join(items)}</ul>'
+            else:
+                issues_cell = ""
+            lines.append('            <tr>')
+            lines.append(f'                <td>{st_badge}</td>')
+            lines.append(f'                <td>{sj_cell}</td>')
+            lines.append(f'                <td>{sj_finished}</td>')
+            lines.append(f'                <td>{sj_duration}</td>')
+            lines.append(f'                <td style="font-size:0.85em">{issues_cell}</td>')
+            lines.append('            </tr>')
+        lines.append('            </tbody>')
+        lines.append('            </table>')
+        lines.append('            </details>')
+
+    if rdata["issues"]:
+        lines.append('            <details class="section-toggle">')
+        lines.append(f'            <summary>Failure Analysis &mdash; {total} {label}</summary>')
     lines.append('            <table class="issues-table">')
     for issue in rdata["issues"]:
         bug_match = match_issue_to_bugs(issue["title"], bug_candidates)
@@ -1421,6 +1523,10 @@ def render_release_section(version, rdata, bug_candidates, index_info=None, jira
             lines.append(f"                <p><em>Next Steps:</em> {_e(issue['next_steps'])}</p>")
         lines.append("            </td></tr>")
     lines.append('            </table>')
+    if rdata["issues"]:
+        lines.append('            </details>')
+
+    lines.append('            </div>')  # section-panels
 
     lines.append("        </div>")
     return "\n".join(lines)
@@ -1590,25 +1696,72 @@ def render_pr_section(pr_data, bug_candidates, pr_status, pr_error=None, jira_cf
     return "\n".join(toc_lines) + "\n\n" + "\n".join(lines)
 
 
-def generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error=None, bugs_tab_data=None, images_tab_data=None, index_data=None, jira_cfg=None):
+def _format_epoch(epoch_str):
+    try:
+        return datetime.fromtimestamp(int(epoch_str), tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError, OSError):
+        return str(epoch_str or "")
+
+
+def _format_duration(dur_str):
+    try:
+        secs = int(float(dur_str))
+        if secs >= 3600:
+            return f"{secs // 3600}h {(secs % 3600) // 60}m"
+        return f"{secs // 60}m {secs % 60}s"
+    except (ValueError, TypeError):
+        return str(dur_str or "")
+
+
+def _build_job_issue_map(releases_data):
+    """Map job name → list of (anchor_id, issue_title) for linking status rows to issues."""
+    result = {}
+    for version, rdata in releases_data.items():
+        if not rdata or not rdata.get("issues"):
+            continue
+        for issue in rdata["issues"]:
+            anchor = f'release-{_e(version)}-{issue["number"]}'
+            title = issue.get("title", "")
+            for job in issue.get("affected_jobs", []):
+                name = job.get("name", "")
+                if name:
+                    result.setdefault(name, []).append((anchor, title))
+    return result
+
+
+
+def generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error=None, bugs_tab_data=None, images_tab_data=None, index_data=None, jira_cfg=None, status_data=None):
     date_str = timestamp.strftime("%Y-%m-%d")
     time_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
     cards = []
     for version, rdata in releases_data.items():
+        status = (status_data or {}).get(version)
         if rdata and rdata.get("collection_error"):
             count = "!"
             css = "status-fail"
+            subtitle = ""
         elif rdata:
-            count = rdata["total_failed"]
-            css = "status-fail" if rdata["total_failed"] > 0 else "status-pass"
+            failed = rdata["total_failed"]
+            if status:
+                total = len(status)
+                passed = sum(1 for j in status if j.get("status") == "success")
+                count = f'{failed}<span style="font-size:0.5em;font-weight:400;color:#6c757d">/{total}</span>'
+                rate = round(passed / total * 100) if total > 0 else 0
+                subtitle = f'<div style="font-size:0.8em;color:#6c757d">{rate}% pass rate</div>'
+            else:
+                count = failed
+                subtitle = ""
+            css = "status-fail" if failed > 0 else "status-pass"
         else:
             count = "?"
             css = ""
+            subtitle = ""
         cards.append(
             '        <div class="overview-card">\n'
             f'            <div class="number {css}">{count}</div>\n'
             f'            <div class="label">Release {_e(version)}</div>\n'
+            f'            {subtitle}\n'
             "        </div>"
         )
     # PR overview: count failures from status (all PRs) or analysis
@@ -1633,25 +1786,35 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
 
     toc = []
     for version, rdata in releases_data.items():
+        status = (status_data or {}).get(version)
         if rdata and rdata.get("collection_error"):
             toc.append(
                 f'                <li><a href="#release-{_e(version)}">Release {_e(version)}</a> &mdash; collection error</li>'
             )
         elif rdata:
             b = rdata["breakdown"]
+            pass_info = ""
+            if status:
+                total = len(status)
+                passed = sum(1 for j in status if j.get("status") == "success")
+                rate = round(passed / total * 100) if total > 0 else 0
+                pass_info = f" &mdash; {passed}/{total} passed ({rate}%)"
             toc.append(
                 f'                <li><a href="#release-{_e(version)}">Release {_e(version)}</a> &mdash; '
                 f'<span class="toc-counts" data-release="{_e(version)}">'
                 f'{rdata["total_failed"]} failures ({b["build"]} build, {b["test"]} test, {b["infrastructure"]} infra)'
-                f'</span></li>'
+                f'{pass_info}</span></li>'
             )
         else:
             toc.append(f'                <li><a href="#release-{_e(version)}">Release {_e(version)}</a> &mdash; no data</li>')
 
+    job_issue_map = _build_job_issue_map(releases_data)
+
     sections = []
     _idx = index_data or {}
     for version, rdata in releases_data.items():
-        sections.append(render_release_section(version, rdata, all_bug_candidates, _idx.get(version), jira_cfg))
+        rs = (status_data or {}).get(version)
+        sections.append(render_release_section(version, rdata, all_bug_candidates, _idx.get(version), jira_cfg, release_status=rs, job_issue_map=job_issue_map))
 
     pr_section = render_pr_section(pr_data, all_bug_candidates, pr_status, pr_error, jira_cfg)
     bugs_section = render_bugs_section(bugs_tab_data) if bugs_tab_data else ""
@@ -1689,6 +1852,7 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
             <div class="toc-header">
                 <h3>Table of Contents</h3>
                 <label class="filter-toggle"><input type="checkbox" id="filter-today" onchange="filterToday(this.checked)"> Today only</label>
+                <label class="filter-toggle"><input type="checkbox" id="toggle-side-by-side" onchange="toggleSideBySide(this.checked)"> Side by side</label>
             </div>
             <ul>
 {chr(10).join(toc)}
@@ -1845,6 +2009,11 @@ def main():
         releases_data[version] = rdata
         bug_data[version] = load_bug_candidates(entry["bugs"])
 
+    status_data = {}
+    for version in releases:
+        entry = files["releases"][version]
+        status_data[version] = load_json(entry.get("status"))
+
     index_data = {}
     for version in releases:
         index_data[version] = extract_index_image(workdir, version)
@@ -1918,7 +2087,7 @@ def main():
 
     # Generate HTML
     timestamp = datetime.now(timezone.utc)
-    html_content = generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error, bugs_tab_data, images_tab_data, index_data, COMPONENT_JIRA_CREATE.get(component))
+    html_content = generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error, bugs_tab_data, images_tab_data, index_data, COMPONENT_JIRA_CREATE.get(component), status_data=status_data)
 
     output_path = os.path.join(workdir, f"report-{component}-ci-doctor.html")
     with open(output_path, "w") as f:
@@ -1929,10 +2098,17 @@ def main():
     print("  Periodics:")
     for version in releases:
         rdata = releases_data[version]
+        status = status_data.get(version)
         if rdata and rdata.get("collection_error"):
             print(f"    Release {version}: ERROR - data collection failed")
         elif rdata:
-            print(f"    Release {version}: {rdata['total_failed']} failed periodic jobs")
+            extra = ""
+            if status:
+                total = len(status)
+                passed = sum(1 for j in status if j.get("status") == "success")
+                rate = round(passed / total * 100) if total > 0 else 0
+                extra = f" ({passed}/{total} passed, {rate}% pass rate)"
+            print(f"    Release {version}: {rdata['total_failed']} failed periodic jobs{extra}")
         else:
             print(f"    Release {version}: no data")
     print("  Pull Requests:")

@@ -79,25 +79,36 @@ cmd_prepare() {
         echo "=== Release ${release} ===" >&2
 
         local jobs_file="${WORKDIR}/jobs/release-${release}-jobs.json"
+        local status_file="${WORKDIR}/jobs/release-${release}-status.json"
 
-        echo "  Collecting failed periodic jobs..." >&2
+        echo "  Collecting periodic jobs..." >&2
         local raw_json raw_err
         raw_err=$(mktemp)
-        if ! raw_json=$(bash "${SCRIPT_DIR}/prow-jobs-for-release.sh" "${COMPONENT}" "${release}" 2>"${raw_err}"); then
+        if ! raw_json=$(bash "${SCRIPT_DIR}/prow-jobs-for-release.sh" --mode status "${COMPONENT}" "${release}" 2>"${raw_err}"); then
             echo "  ERROR: failed to collect jobs for release ${release}:" >&2
             local err_msg
             err_msg=$(cat "${raw_err}")
             echo "${err_msg}" >&2
             rm -f "${raw_err}"
             echo "[]" > "${jobs_file}"
+            echo "[]" > "${status_file}"
             release_errors["${release}"]="${err_msg:-data collection failed}"
             echo "${release_errors["${release}"]}" > "${WORKDIR}/jobs/release-${release}-error.txt"
             continue
         fi
         rm -f "${raw_err}"
 
+        # All periodic jobs (pass + fail) for the CI health overview
+        local all_periodic
+        all_periodic=$(echo "${raw_json}" | jq '[.[] | select(.type == "periodic")]')
+        echo "${all_periodic}" > "${status_file}"
+        local status_count
+        status_count=$(echo "${all_periodic}" | jq 'length')
+        echo "  Found ${status_count} total periodic jobs" >&2
+
+        # Failed periodic jobs for artifact download and analysis
         local filtered_json
-        filtered_json=$(echo "${raw_json}" | jq '[.[] | select(.type == "periodic")]')
+        filtered_json=$(echo "${all_periodic}" | jq '[.[] | select(.status == "failure")]')
 
         local count
         count=$(echo "${filtered_json}" | jq 'length')
@@ -250,19 +261,26 @@ cmd_prepare() {
     for release in "${RELEASES[@]}"; do
         release=$(echo "${release}" | xargs)
         local jobs_file="${WORKDIR}/jobs/release-${release}-jobs.json"
+        local status_file="${WORKDIR}/jobs/release-${release}-status.json"
         local count=0
         if [[ -f "${jobs_file}" ]]; then
             count=$(jq 'length' "${jobs_file}")
         fi
+        local total_count=0
+        if [[ -f "${status_file}" ]]; then
+            total_count=$(jq 'length' "${status_file}")
+        fi
         local error="${release_errors["${release}"]:-}"
         if [[ -n "${error}" ]]; then
             releases_json=$(echo "${releases_json}" | jq \
-                --arg r "${release}" --argjson c "${count}" --arg f "${jobs_file}" --arg e "${error}" \
-                '. + [{release: $r, jobs: $c, jobs_file: $f, error: $e}]')
+                --arg r "${release}" --argjson c "${count}" --arg f "${jobs_file}" \
+                --arg sf "${status_file}" --argjson tc "${total_count}" --arg e "${error}" \
+                '. + [{release: $r, jobs: $c, jobs_file: $f, status_file: $sf, total_jobs: $tc, error: $e}]')
         else
             releases_json=$(echo "${releases_json}" | jq \
                 --arg r "${release}" --argjson c "${count}" --arg f "${jobs_file}" \
-                '. + [{release: $r, jobs: $c, jobs_file: $f}]')
+                --arg sf "${status_file}" --argjson tc "${total_count}" \
+                '. + [{release: $r, jobs: $c, jobs_file: $f, status_file: $sf, total_jobs: $tc}]')
         fi
     done
 
