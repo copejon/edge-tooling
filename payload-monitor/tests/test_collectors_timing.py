@@ -1,5 +1,7 @@
 """Tests for payload_monitor.collectors.timing."""
 
+import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -421,3 +423,237 @@ class TestFetchStepDurations:
         steps = timing.fetch_step_durations("test-job", "12345")
         assert "install" not in steps
         assert steps["pre phase"] == 100.0
+
+
+# ---------------------------------------------------------------------------
+# Retention window helper
+# ---------------------------------------------------------------------------
+
+class TestWithinRetentionWindow:
+    def test_recent_timestamp_is_within(self):
+        # 1 hour ago in milliseconds
+        import time
+        ts_ms = int((time.time() - 3600) * 1000)
+        assert timing._within_retention_window(ts_ms, days=7) is True
+
+    def test_old_timestamp_is_outside(self):
+        # 30 days ago in milliseconds
+        import time
+        ts_ms = int((time.time() - 30 * 86400) * 1000)
+        assert timing._within_retention_window(ts_ms, days=7) is False
+
+    def test_zero_timestamp_returns_true(self):
+        assert timing._within_retention_window(0, days=7) is True
+
+    def test_none_timestamp_returns_true(self):
+        assert timing._within_retention_window(None, days=7) is True
+
+    def test_boundary_exactly_at_cutoff(self):
+        import time
+        ts_ms = int((time.time() - 7 * 86400) * 1000)
+        # At the boundary (within a second of the cutoff) — may be just inside or
+        # just outside depending on execution speed, so just verify it doesn't crash.
+        result = timing._within_retention_window(ts_ms, days=7)
+        assert isinstance(result, bool)
+
+    def test_nonnumeric_timestamp_returns_true(self):
+        for bad_value in ("2026-07-16", ["not", "a", "number"], {"ts": 1}):
+            assert timing._within_retention_window(bad_value, days=7) is True
+
+    def test_bool_timestamp_returns_true(self):
+        assert timing._within_retention_window(True, days=7) is True
+
+
+VALID_RUN = {
+    "job_name": "j1", "topology": "TNA", "release": "4.22",
+    "start_time": "2026-07-15T06:00:00Z", "result": "S", "run_type": "install",
+    "duration_seconds": 3600, "variant": {"network": "ipv4"},
+    "step_durations": {"install": 120.0},
+}
+
+
+class TestIsValidCachePayload:
+    def test_valid_payload_passes(self):
+        assert timing._is_valid_cache_payload({"runs": {"111": VALID_RUN}}) is True
+
+    def test_non_dict_payload_rejected(self):
+        assert timing._is_valid_cache_payload(["not", "a", "dict"]) is False
+
+    def test_non_dict_runs_rejected(self):
+        assert timing._is_valid_cache_payload({"runs": "not_a_dict"}) is False
+
+    def test_missing_required_field_rejected(self):
+        bad_run = {k: v for k, v in VALID_RUN.items() if k != "job_name"}
+        assert timing._is_valid_cache_payload({"runs": {"111": bad_run}}) is False
+
+    def test_non_numeric_duration_rejected(self):
+        bad_run = {**VALID_RUN, "duration_seconds": "not_a_number"}
+        assert timing._is_valid_cache_payload({"runs": {"111": bad_run}}) is False
+
+    def test_bool_duration_rejected(self):
+        bad_run = {**VALID_RUN, "duration_seconds": True}
+        assert timing._is_valid_cache_payload({"runs": {"111": bad_run}}) is False
+
+    def test_non_numeric_step_duration_value_rejected(self):
+        bad_run = {**VALID_RUN, "step_durations": {"install": "not_a_number"}}
+        assert timing._is_valid_cache_payload({"runs": {"111": bad_run}}) is False
+
+    def test_bool_step_duration_value_rejected(self):
+        bad_run = {**VALID_RUN, "step_durations": {"install": True}}
+        assert timing._is_valid_cache_payload({"runs": {"111": bad_run}}) is False
+
+    def test_non_string_variant_value_rejected(self):
+        bad_run = {**VALID_RUN, "variant": {"network": 123}}
+        assert timing._is_valid_cache_payload({"runs": {"111": bad_run}}) is False
+
+
+# ---------------------------------------------------------------------------
+# GCS cache seeding
+# ---------------------------------------------------------------------------
+
+class TestSeedCacheFromPreviousRun:
+    def test_skips_when_cache_exists(self):
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            f.write(b"{}")
+            cache_path = Path(f.name)
+        try:
+            timing.seed_cache_from_previous_run(cache_path)
+            # Should not have made any HTTP calls
+        finally:
+            cache_path.unlink(missing_ok=True)
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_skips_when_job_name_unset(self, tmp_path):
+        cache_path = tmp_path / "nonexistent_test_cache.json"
+        timing.seed_cache_from_previous_run(cache_path)
+        assert not cache_path.exists()
+
+    @patch.object(timing, "_session")
+    @patch.dict(os.environ, {"JOB_NAME": "periodic-ci-test-job", "BUILD_ID": "200"})
+    def test_success_writes_cache(self, mock_session):
+        cache_data = json.dumps({
+            "last_updated": "2026-07-15T07:00:00Z",
+            "runs": {"111": {
+                "job_name": "j1", "topology": "TNA", "release": "4.22",
+                "start_time": "2026-07-15T06:00:00Z", "duration_seconds": 3600,
+                "result": "S", "run_type": "install", "variant": {},
+                "step_durations": {},
+            }},
+            "phase_durations": {},
+        })
+
+        latest_resp = MagicMock()
+        latest_resp.text = "199\n"
+        latest_resp.raise_for_status = MagicMock()
+
+        cache_resp = MagicMock()
+        cache_resp.text = cache_data
+        cache_resp.raise_for_status = MagicMock()
+
+        mock_session.get.side_effect = [latest_resp, cache_resp]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_path = Path(tmpdir) / "timing_cache.json"
+            timing.seed_cache_from_previous_run(cache_path)
+
+            assert cache_path.exists()
+            loaded = json.loads(cache_path.read_text())
+            assert "111" in loaded["runs"]
+
+    @patch.object(timing, "_session")
+    @patch.dict(os.environ, {"JOB_NAME": "periodic-ci-test-job", "BUILD_ID": "200"})
+    def test_latest_build_failure_no_crash(self, mock_session, tmp_path):
+        mock_session.get.side_effect = requests.RequestException("network error")
+
+        cache_path = tmp_path / "nonexistent_seed_test.json"
+        timing.seed_cache_from_previous_run(cache_path)
+        assert not cache_path.exists()
+
+    @patch.object(timing, "_session")
+    @patch.dict(os.environ, {"JOB_NAME": "periodic-ci-test-job", "BUILD_ID": "200"})
+    def test_cache_artifact_404_no_crash(self, mock_session, tmp_path):
+        latest_resp = MagicMock()
+        latest_resp.text = "199\n"
+        latest_resp.raise_for_status = MagicMock()
+
+        cache_resp = MagicMock()
+        cache_resp.raise_for_status.side_effect = requests.RequestException("404")
+
+        mock_session.get.side_effect = [latest_resp, cache_resp]
+
+        cache_path = tmp_path / "nonexistent_seed_test.json"
+        timing.seed_cache_from_previous_run(cache_path)
+        assert not cache_path.exists()
+
+    @patch.object(timing, "_session")
+    @patch.dict(os.environ, {"JOB_NAME": "periodic-ci-test-job", "BUILD_ID": "200"})
+    def test_skips_when_latest_is_current_build(self, mock_session, tmp_path):
+        latest_resp = MagicMock()
+        latest_resp.text = "200\n"
+        latest_resp.raise_for_status = MagicMock()
+
+        mock_session.get.return_value = latest_resp
+
+        cache_path = tmp_path / "nonexistent_seed_test.json"
+        timing.seed_cache_from_previous_run(cache_path)
+        assert not cache_path.exists()
+        # Should only have called GET once (for latest-build.txt), not for the cache artifact
+        assert mock_session.get.call_count == 1
+
+    @patch.object(timing, "_session")
+    @patch.dict(os.environ, {"JOB_NAME": "periodic-ci-test-job", "BUILD_ID": "200"})
+    def test_invalid_json_from_artifact_no_crash(self, mock_session, tmp_path):
+        latest_resp = MagicMock()
+        latest_resp.text = "199\n"
+        latest_resp.raise_for_status = MagicMock()
+
+        cache_resp = MagicMock()
+        cache_resp.text = "not valid json {"
+        cache_resp.raise_for_status = MagicMock()
+
+        mock_session.get.side_effect = [latest_resp, cache_resp]
+
+        cache_path = tmp_path / "nonexistent_seed_test.json"
+        timing.seed_cache_from_previous_run(cache_path)
+        assert not cache_path.exists()
+
+    @patch.object(timing, "_session")
+    @patch.dict(os.environ, {"JOB_NAME": "periodic-ci-test-job", "BUILD_ID": "200"})
+    def test_structurally_invalid_json_no_crash(self, mock_session, tmp_path):
+        # Valid JSON, but not the shape load_cache() expects (runs entries
+        # missing required string fields).
+        cache_data = json.dumps({"runs": {"111": {"job_name": "j1"}}})
+
+        latest_resp = MagicMock()
+        latest_resp.text = "199\n"
+        latest_resp.raise_for_status = MagicMock()
+
+        cache_resp = MagicMock()
+        cache_resp.text = cache_data
+        cache_resp.raise_for_status = MagicMock()
+
+        mock_session.get.side_effect = [latest_resp, cache_resp]
+
+        cache_path = tmp_path / "nonexistent_seed_test.json"
+        timing.seed_cache_from_previous_run(cache_path)
+        assert not cache_path.exists()
+
+    @patch.object(timing, "_session")
+    @patch.dict(os.environ, {"JOB_NAME": "periodic-ci-test-job", "BUILD_ID": "200"})
+    def test_write_failure_no_crash(self, mock_session, tmp_path):
+        cache_data = json.dumps({"runs": {"111": VALID_RUN}})
+
+        latest_resp = MagicMock()
+        latest_resp.text = "199\n"
+        latest_resp.raise_for_status = MagicMock()
+
+        cache_resp = MagicMock()
+        cache_resp.text = cache_data
+        cache_resp.raise_for_status = MagicMock()
+
+        mock_session.get.side_effect = [latest_resp, cache_resp]
+
+        cache_path = tmp_path / "nonexistent_seed_test.json"
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            timing.seed_cache_from_previous_run(cache_path)
+        assert not cache_path.exists()

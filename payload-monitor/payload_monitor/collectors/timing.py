@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Optional
 import json
 import logging
+import os
 import statistics as stats_mod
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -28,7 +29,142 @@ DURATIONS_URL = f"{BASE_URL}/api/tests/durations"
 
 GCS_BASE = "https://storage.googleapis.com/test-platform-results/logs"
 
+CACHE_ARTIFACT_RELPATH = (
+    "artifacts/ocp-ci-monitor/"
+    "openshift-edge-tooling-ci-monitor/artifacts/timing_cache.json"
+)
+
 _session = create_session()
+
+
+# ---------------------------------------------------------------------------
+# GCS cache seeding (cross-run persistence)
+# ---------------------------------------------------------------------------
+
+def seed_cache_from_previous_run(cache_path: Path) -> None:
+    """Download timing_cache.json from the previous Prow run's GCS artifacts.
+
+    Uses the ``latest-build.txt`` convention to find the most recent completed
+    build, then fetches its ``timing_cache.json`` artifact over public HTTPS.
+    Skips gracefully on any failure (logging a warning) — this must never be
+    fatal, because a cold start is the natural fallback.
+    """
+    if cache_path.exists():
+        return
+
+    job_name = os.environ.get("JOB_NAME", "")
+    if not job_name:
+        return
+
+    current_build = os.environ.get("BUILD_ID", "")
+
+    try:
+        resp = _session.get(
+            f"{GCS_BASE}/{job_name}/latest-build.txt", timeout=10,
+        )
+        resp.raise_for_status()
+        latest_build = resp.text.strip()
+    except requests_lib.RequestException as e:
+        logger.warning(f"Could not fetch latest-build.txt for {job_name}: {e}")
+        return
+
+    if not latest_build or "<" in latest_build:
+        logger.warning(f"Invalid latest-build.txt content for {job_name}")
+        return
+
+    # Don't download our own (in-progress) artifacts.
+    if current_build and latest_build == current_build:
+        logger.info("latest-build.txt points to current run, skipping seed")
+        return
+
+    cache_url = f"{GCS_BASE}/{job_name}/{latest_build}/{CACHE_ARTIFACT_RELPATH}"
+    try:
+        resp = _session.get(cache_url, timeout=30)
+        resp.raise_for_status()
+    except requests_lib.RequestException as e:
+        logger.warning(f"Could not fetch previous cache artifact: {e}")
+        return
+
+    try:
+        payload = json.loads(resp.text)
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(
+            f"Previous cache artifact is not valid JSON (build {latest_build}): {e}"
+        )
+        return
+
+    if not _is_valid_cache_payload(payload):
+        logger.warning("Previous cache artifact has unexpected structure, ignoring")
+        return
+
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(resp.text)
+    except OSError as e:
+        logger.warning(f"Could not write seeded cache to {cache_path}: {e}")
+        return
+    logger.info(
+        f"Seeded timing cache from build {latest_build} "
+        f"({len(payload.get('runs', {}))} runs)"
+    )
+
+
+# Fields load_cache() indexes directly (run_data["..."]) with no default —
+# a missing or wrong-typed value there raises KeyError/TypeError.
+_REQUIRED_RUN_STRING_FIELDS = (
+    "job_name", "topology", "release", "start_time", "result", "run_type",
+)
+
+
+def _is_valid_cache_payload(data) -> bool:
+    """Validate a downloaded cache payload matches the shape load_cache() expects.
+
+    This is an untrusted, externally-fetched artifact (GCS), so we allow-list
+    the exact structure rather than trusting arbitrary valid JSON.
+    """
+    if not isinstance(data, dict):
+        return False
+    runs = data.get("runs")
+    if not isinstance(runs, dict):
+        return False
+    for run_data in runs.values():
+        if not isinstance(run_data, dict):
+            return False
+        if not all(
+            isinstance(run_data.get(field), str)
+            for field in _REQUIRED_RUN_STRING_FIELDS
+        ):
+            return False
+        duration = run_data.get("duration_seconds")
+        if not isinstance(duration, (int, float)) or isinstance(duration, bool):
+            return False
+        for optional_field in ("variant", "step_durations"):
+            if optional_field in run_data and not isinstance(run_data[optional_field], dict):
+                return False
+        for v in run_data.get("step_durations", {}).values():
+            if not isinstance(v, (int, float)) or isinstance(v, bool):
+                return False
+        for v in run_data.get("variant", {}).values():
+            if not isinstance(v, str):
+                return False
+    return True
+
+
+def _within_retention_window(timestamp_ms, days: int) -> bool:
+    """Return True if *timestamp_ms* falls within the last *days* days.
+
+    Returns True for missing/zero/non-numeric timestamps (can't judge age).
+    """
+    if not timestamp_ms:
+        return True
+    if not isinstance(timestamp_ms, (int, float)) or isinstance(timestamp_ms, bool):
+        return True
+    try:
+        run_time = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+    except (OSError, ValueError, OverflowError):
+        return True
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    return run_time >= cutoff
 
 
 # ---------------------------------------------------------------------------
@@ -348,13 +484,15 @@ def collect(
     """Collect timing data for SNO/TNA/TNF jobs across versions.
 
     Pipeline (parallelized at each stage):
-    1. Load existing cache
+    1. Seed the local cache from the previous Prow run's GCS artifacts, then
+       load the (possibly just-seeded) existing cache
     2. Fetch SNO/TNA/TNF jobs for all versions in parallel
     3. Fetch job runs for all jobs in parallel
     4. Fetch summaries + step durations for all new runs in parallel
     5. Fetch per-phase durations in parallel
     6. Prune old data, save cache
     """
+    seed_cache_from_previous_run(cache_path)
     report = load_cache(cache_path)
     cached_ids = set(report.runs.keys())
     logger.info(f"Timing: loaded {len(cached_ids)} cached runs")
@@ -407,8 +545,11 @@ def collect(
                 continue
             for r in runs:
                 rid = str(r.get("prow_id", ""))
-                if rid and rid not in cached_ids:
-                    new_run_tasks.append((rid, job_name, r, version, topology, run_type, variant))
+                if not rid or rid in cached_ids:
+                    continue
+                if not _within_retention_window(r.get("timestamp", 0), days):
+                    continue
+                new_run_tasks.append((rid, job_name, r, version, topology, run_type, variant))
 
     logger.info(f"Timing: {len(new_run_tasks)} new runs to fetch details for")
 
