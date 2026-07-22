@@ -17,6 +17,7 @@ LVMS (Logical Volume Manager Storage) release, QE, and operational workflows.
 | `/lvms:check-release-readiness` | Verify branches, dependencies, and configuration for an LVMS release |
 | `/lvms:z-stream-report` | Generate z-stream release urgency report for all supported versions |
 | `/lvms:setup-prereq` | Set up prerequisites to test unreleased LVMS operator builds |
+| `/lvms:run-integration-tests` | Run QE integration tests from lvm-operator repo — deploy from source, run, collect results, post to JIRA |
 
 ## Usage
 
@@ -53,6 +54,13 @@ LVMS (Logical Volume Manager Storage) release, QE, and operational workflows.
 /lvms:setup-prereq disconnected
 ```
 
+### Run integration tests (RC/EC builds)
+
+```text
+/lvms:run-integration-tests
+/lvms:run-integration-tests OCPEDGE-1995
+```
+
 ## Requirements
 
 - `oc` CLI (authenticated with cluster-admin)
@@ -61,6 +69,8 @@ LVMS (Logical Volume Manager Storage) release, QE, and operational workflows.
 - `skopeo` (for z-stream report registry queries)
 - Jira credentials (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`) for z-stream report
 - Python 3 with PyYAML (for must-gather analysis)
+- Go 1.24+ on the hypervisor (for `run-integration-tests`)
+- TNF cluster with extra disks and SSH-accessible hypervisor (for `run-integration-tests`)
 - **Category:** operator
 
 ## Author
