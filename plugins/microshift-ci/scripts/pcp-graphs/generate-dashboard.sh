@@ -6,8 +6,8 @@
 #   --local <path>      Use a local scenario-info/ directory
 #
 # Usage:
-#   generate-dashboard.sh --url <prow-url> [--parallel N] [--timezone TZ] [--output FILE] [--title TITLE]
-#   generate-dashboard.sh --local <path> [--parallel N] [--timezone TZ] [--output FILE] [--title TITLE]
+#   generate-dashboard.sh --url <prow-url> [--parallel N] [--timezone TZ] [--output FILE]
+#   generate-dashboard.sh --local <path> [--parallel N] [--timezone TZ] [--output FILE]
 #
 # Prerequisites: python3, and one of:
 #   - pcp-export-pcp2json (native)
@@ -21,7 +21,6 @@ SHARED_SCRIPTS="$(cd "${SCRIPT_DIR}/../../../shared/scripts" && pwd)"
 URL=""
 LOCAL_PATH=""
 OUTPUT=""
-TITLE=""
 PARALLEL=6
 TIMEZONE="UTC"
 PCP2JSON_MODE=""  # "native" or "container"
@@ -36,7 +35,6 @@ usage() {
     echo "  --url URL       : Prow job URL (mutually exclusive with --local)" >&2
     echo "  --local PATH    : path to scenario-info/ directory (mutually exclusive with --url)" >&2
     echo "  --output FILE   : output HTML file path (default: <workdir>/pcp-dashboard.html)" >&2
-    echo "  --title TITLE   : HTML <title> for the dashboard" >&2
     echo "  --parallel N    : number of parallel extraction jobs (default: 6)" >&2
     echo "  --timezone TZ   : IANA timezone for timestamps (default: UTC)" >&2
     exit 1
@@ -53,9 +51,6 @@ while [[ $# -gt 0 ]]; do
         --output)
             [[ $# -lt 2 ]] && { echo "Error: --output requires a file path" >&2; usage; }
             OUTPUT="$2"; shift 2 ;;
-        --title)
-            [[ $# -lt 2 ]] && { echo "Error: --title requires a value" >&2; usage; }
-            TITLE="$2"; shift 2 ;;
         --parallel)
             [[ $# -lt 2 ]] && { echo "Error: --parallel requires a number" >&2; usage; }
             [[ "$2" =~ ^[1-9][0-9]*$ ]] || { echo "Error: --parallel must be a positive integer" >&2; usage; }
@@ -364,7 +359,6 @@ python3 "${SCRIPT_DIR}/extract_scenarios.py" --workdir "${WORKDIR}"
 echo "Generating HTML dashboard..." >&2
 dashboard_args=(--workdir "${WORKDIR}" --timezone "${TIMEZONE}")
 [[ -n "${OUTPUT}" ]] && dashboard_args+=(--output "${OUTPUT}")
-[[ -n "${TITLE}" ]] && dashboard_args+=(--title "${TITLE}")
 
 python3 "${SCRIPT_DIR}/create-pcp-dashboard.py" "${dashboard_args[@]}"
 
