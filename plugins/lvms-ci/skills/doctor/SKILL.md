@@ -48,7 +48,7 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
 
 3. The script deterministically:
    - For each release: fetches failed periodic jobs, downloads artifacts, writes `<WORKDIR>/jobs/release-<version>-jobs.json`
-   - Collects open z-stream PRs targeting `release-management` and fetches their presubmit results
+   - For PRs: fetches PRs with failures, downloads artifacts, writes `<WORKDIR>/jobs/prs-jobs.json` and `<WORKDIR>/jobs/prs-status.json`
    - Outputs a JSON summary listing all releases, job counts, and file paths
 4. Read the JSON output to know which releases have jobs to analyze and how many
 
@@ -59,6 +59,7 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
 - `artifacts_dir` — local path to downloaded artifacts
 - `url` — Prow job URL
 - `status` — job result (`failure`, `FAILURE`, `SUCCESS`, `PENDING`)
+- `pr_number` — PR number (PR jobs only)
 
 **Error Handling**:
 
@@ -73,7 +74,9 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
 **Actions**:
 
 1. Use the JSON summary output from Step 1 to build agent prompts. Do NOT read the job JSON files into the main conversation — the prepare script already printed all job details (artifacts_dir, build_id, job name) and agents receive artifacts_dir directly in their prompt.
-2. For **every** failed job across all releases, launch a separate **Agent** (using the `Agent` tool, NOT the `Skill` tool):
+2. For **every** failed job across all releases and PRs, launch a separate **Agent** (using the `Agent` tool, NOT the `Skill` tool). For PR jobs, only launch agents for jobs with FAILURE status.
+
+   **For release jobs:**
 
    ```text
    Agent: subagent_type=general_purpose, prompt="Analyze this Prow job and save the report:
@@ -84,7 +87,22 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
       Use the Write tool. The file must contain ONLY the valid JSON array — no prose, no markers."
    ```
 
-3. Launch **ALL** agents in a **single message** as **foreground** agents (do NOT use `run_in_background`). Foreground agents in the same message run concurrently — this is just as fast as background agents but keeps your turn active until all complete.
+   **For PR jobs:**
+
+   ```text
+   Agent: subagent_type=general_purpose, prompt="Analyze this Prow job and save the report:
+   1. Run /lvms-ci:prow-job <ARTIFACTS_DIR>
+   2. After the analysis completes, extract only the JSON array from the output
+      and save it to:
+      <WORKDIR>/jobs/prs-job-<N>-pr<PR_NUMBER>-<JOB_NAME_SUFFIX>.json
+      Use the Write tool. The file must contain ONLY the valid JSON array — no prose, no markers."
+   ```
+
+   After each agent completes, save its JSON response to the corresponding file using the Write tool:
+   - Release jobs: `<WORKDIR>/jobs/release-<RELEASE>-job-<N>-<JOB_ID>.json`
+   - PR jobs: `<WORKDIR>/jobs/prs-job-<N>-pr<PR_NUMBER>-<JOB_NAME_SUFFIX>.json`
+
+3. Launch **ALL** agents (all releases + PRs) in a **single message** as **foreground** agents (do NOT use `run_in_background`). Foreground agents in the same message run concurrently — this is just as fast as background agents but keeps your turn active until all complete.
 4. Say "Analyzing N jobs in parallel..." in your message text alongside the Agent tool calls.
 5. When all agents return, immediately proceed to Step 3 in the same turn. Do NOT stop or end your turn between Step 2 and Step 3.
 
@@ -103,7 +121,7 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
    ```
 
 2. The script deterministically:
-   - Runs `aggregate.py` for each release → `summary.json` files
+   - Runs `aggregate.py` for each release and for PRs → `summary.json` files
    - Runs `create-report.py` → `report-lvm-operator-ci-doctor.html`
 3. Report the script's output to the user
 
@@ -112,7 +130,7 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
 **Actions**:
 
 1. Display the path to the generated HTML file
-2. Summarize: failed job counts per release
+2. Summarize: failed job counts per release, PR status
 
 **Example Output**:
 
@@ -121,6 +139,8 @@ Summary:
   Periodics:
     Release main: 3 failed periodic jobs
     Release 4.22: 0 failed periodic jobs
+  Pull Requests:
+    4 PRs with 6 total failed jobs
 
 HTML report generated: <WORKDIR>/report-lvm-operator-ci-doctor.html
 ```
