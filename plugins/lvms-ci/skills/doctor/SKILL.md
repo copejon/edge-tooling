@@ -74,7 +74,7 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
 **Actions**:
 
 1. Use the JSON summary output from Step 1 to build agent prompts. Do NOT read the job JSON files into the main conversation — the prepare script already printed all job details (artifacts_dir, build_id, job name) and agents receive artifacts_dir directly in their prompt.
-2. For **every** failed job across all releases and PRs, launch a separate **Agent** (using the `Agent` tool, NOT the `Skill` tool). For PR jobs, only launch agents for jobs with FAILURE status.
+2. For **every** failed job across all releases and PRs, launch a separate **Agent** (using the `Agent` tool, NOT the `Skill` tool). For PR jobs, only analyze jobs whose status is `failure` or `FAILURE` (exclude `SUCCESS` and `PENDING`).
 
    **For release jobs:**
 
@@ -121,7 +121,7 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
    ```
 
 2. The script deterministically:
-   - Runs `aggregate.py` for each release and for PRs → `summary.json` files
+   - Runs `aggregate.py` for each release → `release-<version>-summary.json`, and for PRs → `prs-summary.json`
    - Runs `create-report.py` → `report-lvm-operator-ci-doctor.html`
 3. Report the script's output to the user
 
