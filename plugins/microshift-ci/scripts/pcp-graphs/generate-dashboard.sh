@@ -6,8 +6,8 @@
 #   --local <path>      Use a local scenario-info/ directory
 #
 # Usage:
-#   generate-dashboard.sh --url <prow-url> [--parallel N] [--timezone TZ]
-#   generate-dashboard.sh --local <path> [--build-id ID] [--output FILE] [--title TITLE] [--timezone TZ]
+#   generate-dashboard.sh --url <prow-url> [--parallel N] [--timezone TZ] [--output FILE] [--title TITLE]
+#   generate-dashboard.sh --local <path> [--parallel N] [--timezone TZ] [--output FILE] [--title TITLE]
 #
 # Prerequisites: python3, and one of:
 #   - pcp-export-pcp2json (native)
@@ -20,7 +20,6 @@ SHARED_SCRIPTS="$(cd "${SCRIPT_DIR}/../../../shared/scripts" && pwd)"
 
 URL=""
 LOCAL_PATH=""
-BUILD_ID=""
 OUTPUT=""
 TITLE=""
 PARALLEL=6
@@ -31,13 +30,12 @@ CONTAINER_IMAGE="pcp2json-tool"
 
 usage() {
     echo "Usage:" >&2
-    echo "  ${0} --url <prow-url> [--parallel N] [--timezone TZ]" >&2
-    echo "  ${0} --local <path> [--build-id ID] [--output FILE] [--title TITLE] [--timezone TZ]" >&2
+    echo "  ${0} --url <prow-url> [OPTIONS]" >&2
+    echo "  ${0} --local <path> [OPTIONS]" >&2
     echo "" >&2
-    echo "  --url URL       : Prow job URL" >&2
-    echo "  --local PATH    : path to scenario-info/ directory" >&2
-    echo "  --build-id ID   : build label (default: local)" >&2
-    echo "  --output FILE   : output HTML file path" >&2
+    echo "  --url URL       : Prow job URL (mutually exclusive with --local)" >&2
+    echo "  --local PATH    : path to scenario-info/ directory (mutually exclusive with --url)" >&2
+    echo "  --output FILE   : output HTML file path (default: <workdir>/pcp-dashboard.html)" >&2
     echo "  --title TITLE   : HTML <title> for the dashboard" >&2
     echo "  --parallel N    : number of parallel extraction jobs (default: 6)" >&2
     echo "  --timezone TZ   : IANA timezone for timestamps (default: UTC)" >&2
@@ -52,10 +50,6 @@ while [[ $# -gt 0 ]]; do
         --local)
             [[ $# -lt 2 ]] && { echo "Error: --local requires a path" >&2; usage; }
             LOCAL_PATH="$2"; shift 2 ;;
-        --build-id)
-            [[ $# -lt 2 ]] && { echo "Error: --build-id requires a value" >&2; usage; }
-            [[ "$2" =~ ^[a-zA-Z0-9._-]+$ ]] || { echo "Error: --build-id contains invalid characters" >&2; usage; }
-            BUILD_ID="$2"; shift 2 ;;
         --output)
             [[ $# -lt 2 ]] && { echo "Error: --output requires a file path" >&2; usage; }
             OUTPUT="$2"; shift 2 ;;
@@ -91,7 +85,7 @@ fi
 if [[ -n "${LOCAL_PATH}" ]]; then
     # Local mode: symlink the local scenario-info into a temp workdir
     LOCAL_PATH="$(cd "${LOCAL_PATH}" && pwd)"
-    BUILD_ID="${BUILD_ID:-local}"
+    BUILD_ID="local"
     WORKDIR=$(mktemp -d "/tmp/microshift-pcp-local.XXXXXX")
     mkdir -p "${WORKDIR}/artifacts/${BUILD_ID}"
     ln -s "${LOCAL_PATH}" "${WORKDIR}/artifacts/${BUILD_ID}/scenario-info"
