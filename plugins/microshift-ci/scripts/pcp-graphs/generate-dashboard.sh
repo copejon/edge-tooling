@@ -1,12 +1,15 @@
 #!/usr/bin/bash
-# Generate an interactive PCP performance dashboard from a Prow job URL.
+# Generate an interactive PCP performance dashboard.
 #
-# Downloads artifacts from GCS, extracts per-VM PCP archives, and produces
-# an interactive HTML dashboard.
+# Two modes:
+#   --url  <prow-url>   Download artifacts from GCS (default)
+#   --local <path>      Use a local scenario-info/ directory
 #
-# Usage: generate-dashboard.sh --url <prow-url> [--parallel N] [--timezone TZ]
+# Usage:
+#   generate-dashboard.sh --url <prow-url> [--parallel N] [--timezone TZ] [--output FILE]
+#   generate-dashboard.sh --local <path> [--parallel N] [--timezone TZ] [--output FILE]
 #
-# Prerequisites: gsutil, python3, and one of:
+# Prerequisites: python3, and one of:
 #   - pcp-export-pcp2json (native)
 #   - podman (container fallback)
 
@@ -16,6 +19,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SHARED_SCRIPTS="$(cd "${SCRIPT_DIR}/../../../shared/scripts" && pwd)"
 
 URL=""
+LOCAL_PATH=""
+OUTPUT=""
 PARALLEL=6
 TIMEZONE="UTC"
 PCP2JSON_MODE=""  # "native" or "container"
@@ -23,8 +28,13 @@ CONTAINER_RT=""   # "podman"
 CONTAINER_IMAGE="pcp2json-tool"
 
 usage() {
-    echo "Usage: ${0} --url <prow-url> [--parallel N] [--timezone TZ]" >&2
-    echo "  --url URL       : Prow job URL (required)" >&2
+    echo "Usage:" >&2
+    echo "  ${0} --url <prow-url> [OPTIONS]" >&2
+    echo "  ${0} --local <path> [OPTIONS]" >&2
+    echo "" >&2
+    echo "  --url URL       : Prow job URL (mutually exclusive with --local)" >&2
+    echo "  --local PATH    : path to scenario-info/ directory (mutually exclusive with --url)" >&2
+    echo "  --output FILE   : output HTML file path (default: <workdir>/pcp-dashboard.html)" >&2
     echo "  --parallel N    : number of parallel extraction jobs (default: 6)" >&2
     echo "  --timezone TZ   : IANA timezone for timestamps (default: UTC)" >&2
     exit 1
@@ -35,6 +45,12 @@ while [[ $# -gt 0 ]]; do
         --url)
             [[ $# -lt 2 ]] && { echo "Error: --url requires a URL" >&2; usage; }
             URL="$2"; shift 2 ;;
+        --local)
+            [[ $# -lt 2 ]] && { echo "Error: --local requires a path" >&2; usage; }
+            LOCAL_PATH="$2"; shift 2 ;;
+        --output)
+            [[ $# -lt 2 ]] && { echo "Error: --output requires a file path" >&2; usage; }
+            OUTPUT="$2"; shift 2 ;;
         --parallel)
             [[ $# -lt 2 ]] && { echo "Error: --parallel requires a number" >&2; usage; }
             [[ "$2" =~ ^[1-9][0-9]*$ ]] || { echo "Error: --parallel must be a positive integer" >&2; usage; }
@@ -47,20 +63,34 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "${URL}" ]]; then
-    echo "Error: --url is required" >&2
+if [[ -n "${URL}" && -n "${LOCAL_PATH}" ]]; then
+    echo "Error: --url and --local are mutually exclusive" >&2
+    usage
+fi
+
+if [[ -z "${URL}" && -z "${LOCAL_PATH}" ]]; then
+    echo "Error: --url or --local is required" >&2
     usage
 fi
 
 # ---------------------------------------------------------------------------
-# URL parsing and artifact download (delegates to shared download-jobs.sh)
+# Set up WORKDIR depending on mode
 # ---------------------------------------------------------------------------
 
-# Extract build ID (last path segment of the URL) to compute workdir
-BUILD_ID=$(basename "${URL%/}")
-WORKDIR="/tmp/microshift-job-pcp-dashboard.${BUILD_ID}"
-
-bash "${SHARED_SCRIPTS}/download-jobs.sh" --workdir "${WORKDIR}" --url "${URL}"
+if [[ -n "${LOCAL_PATH}" ]]; then
+    # Local mode: symlink the local scenario-info into a temp workdir
+    LOCAL_PATH="$(cd "${LOCAL_PATH}" && pwd)"
+    BUILD_ID="local"
+    WORKDIR=$(mktemp -d "/tmp/microshift-pcp-local.XXXXXX")
+    mkdir -p "${WORKDIR}/artifacts/${BUILD_ID}"
+    ln -s "${LOCAL_PATH}" "${WORKDIR}/artifacts/${BUILD_ID}/scenario-info"
+    echo "Local mode: ${LOCAL_PATH} -> ${WORKDIR}/artifacts/${BUILD_ID}/scenario-info" >&2
+else
+    # URL mode: download artifacts via shared script
+    BUILD_ID=$(basename "${URL%/}")
+    WORKDIR="/tmp/microshift-job-pcp-dashboard.${BUILD_ID}"
+    bash "${SHARED_SCRIPTS}/download-jobs.sh" --workdir "${WORKDIR}" --url "${URL}"
+fi
 
 # ---------------------------------------------------------------------------
 # pcp2json detection: native or container fallback
@@ -121,7 +151,7 @@ run_pcp2json() {
 # ---------------------------------------------------------------------------
 
 find_pcp_tarballs() {
-    find "${WORKDIR}/artifacts" -name "pcp-archives.tar" -path "*/vms/*/pcp/*" \
+    find -L "${WORKDIR}/artifacts" -name "pcp-archives.tar" -path "*/vms/*/pcp/*" \
         2>/dev/null | sort
 }
 
@@ -223,7 +253,7 @@ process_tarball() {
 # ---------------------------------------------------------------------------
 
 find_hypervisor_pcp_dirs() {
-    find "${WORKDIR}/artifacts" -name "Latest" -path "*pmlogs*" \
+    find -L "${WORKDIR}/artifacts" -name "Latest" -path "*pmlogs*" \
         -exec dirname {} \; 2>/dev/null | sort
 }
 
@@ -327,10 +357,12 @@ python3 "${SCRIPT_DIR}/extract_scenarios.py" --workdir "${WORKDIR}"
 
 # Generate the HTML dashboard
 echo "Generating HTML dashboard..." >&2
-python3 "${SCRIPT_DIR}/create-pcp-dashboard.py" \
-    --workdir "${WORKDIR}" --timezone "${TIMEZONE}"
+dashboard_args=(--workdir "${WORKDIR}" --timezone "${TIMEZONE}")
+[[ -n "${OUTPUT}" ]] && dashboard_args+=(--output "${OUTPUT}")
 
-output="${WORKDIR}/pcp-dashboard.html"
+python3 "${SCRIPT_DIR}/create-pcp-dashboard.py" "${dashboard_args[@]}"
+
+output="${OUTPUT:-${WORKDIR}/pcp-dashboard.html}"
 if [[ -f "${output}" ]]; then
     echo "Dashboard: ${output}" >&2
 else

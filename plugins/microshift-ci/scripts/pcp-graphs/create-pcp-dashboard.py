@@ -333,7 +333,7 @@ def build_html(chartjs_src, pcp_charts_src, data_json, scenarios_json, timezone)
 </head>
 <body>
 <div class="sidebar">
-    <h1>PCP Dashboard</h1>
+    <h1>PCP Performance Dashboard</h1>
     <div style="padding:4px 16px;font-size:0.75em;color:#8888aa;">Timezone: {safe_tz}</div>
     <div id="sidebar-items"></div>
 </div>
