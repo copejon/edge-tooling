@@ -21,7 +21,8 @@ VENDOR_DIR = os.path.join(SCRIPT_DIR, "vendor")
 
 CSS = """\
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; display: flex; height: 100vh; overflow: hidden; }
+html, body { height: 100%; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; display: flex; min-height: 600px; }
 .sidebar { width: 300px; min-width: 300px; background: #1a1a2e; color: #e0e0e0; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; }
 .sidebar h1 { font-size: 1.1em; padding: 0 16px 12px; border-bottom: 1px solid #2a2a4e; color: #fff; }
 .sidebar .build-group { margin-top: 12px; }
@@ -58,7 +59,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .vm-tab { padding: 8px 16px; cursor: pointer; font-size: 0.88em; color: #6c757d; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s, border-color 0.15s; }
 .vm-tab:hover { color: #333; }
 .vm-tab.active { color: #1a1a2e; border-bottom-color: #e94560; font-weight: 600; }
-.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; color: #6c757d; }
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 400px; color: #6c757d; }
 .empty-state h2 { font-size: 1.3em; margin-bottom: 8px; }
 @media (max-width: 900px) {
     .chart-grid { grid-template-columns: 1fr; }
