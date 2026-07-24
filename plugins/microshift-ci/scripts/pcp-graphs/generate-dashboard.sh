@@ -261,7 +261,8 @@ process_hypervisor_dir() {
     local pcp_dir="$1"
 
     local build_id
-    build_id=$(echo "${pcp_dir}" | sed -nE 's|.*/artifacts/([0-9]*)/artifacts/.*|\1|p')
+    local rel="${pcp_dir#"${WORKDIR}/artifacts/"}"
+    build_id=$(echo "${rel}" | cut -d/ -f1)
     if [[ -z "${build_id}" ]]; then
         echo "  SKIP: cannot extract build_id from hypervisor path" >&2
         return 0
