@@ -44,6 +44,9 @@ Respond with a valid JSON array only — no prose, no markdown fences. One objec
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/operatorhub-subscribe-lvm-operator/build-log.txt`: LVMS operator subscription step log.
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/storage-create-lvm-cluster/build-log.txt`: LVMCluster creation step log.
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/lvms-sno-integration-test/build-log.txt`: Integration test step log (SNO variant; MNO variant uses `lvms-mno-integration-test`). This file is a JSON array of test result objects (not plain text). Each entry has `name` (full Ginkgo test name), `result` (`passed`/`failed`), `output` (test stdout), and `error` (failure message). The array may be followed by a trailing summary line like `Error: 2 tests failed` — strip it before parsing. Use the `name` field of failed entries to populate `scenarios`.
+- `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/gather-extra/artifacts/pods/`: Pod logs collected at the end of the test run. Filenames follow the pattern `<namespace>_<pod-name>_<container>.log` (and `_previous.log` for previous container instances). LVMS operator and component logs are under `openshift-lvm-storage_*`. Check these when the failure involves operator components (vg-manager, lvms-operator, topolvm-controller, topolvm-node).
+- `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/gather-extra/artifacts/events.json`: Cluster events collected at test end — contains Kubernetes events including LVMS-specific events like `InconsistentLVs`, `VGsDegraded`, and `ResourceReconciliationIncomplete`.
+- `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/gather-extra/artifacts/oc_cmds/`: Outputs of diagnostic `oc` commands (e.g., `oc get nodes`, `oc get pods`).
 
 ## Important Links
 
@@ -62,6 +65,8 @@ Check the operator setup chain early: `lvms-catalogsource` → `operatorhub-subs
 The first error found is the anchor for deduplication, not the conclusion of the investigation. Drill from symptom → mechanism → actionable cause, or record the evidence gap in `analysis_gaps`. A timeout is not a root cause — explain what was slow or absent. A crash is not a root cause — explain what triggered it.
 
 The purpose of this analysis is to surface product defects. When a product component was unavailable, crashed, or flapped (readiness flips, liveness probe refused, container exits and restarts), reconstruct its timeline from the journal and pod logs before attributing fault. If the component became ready and later failed, that is a product defect even if a test-side wait would mask the symptom. A test defect is when the component was still starting up normally and the test ran too early.
+
+When the failure involves LVMS operator components (vg-manager, lvms-operator, topolvm-controller, topolvm-node), always check the operator and controller logs in `gather-extra/artifacts/pods/` and the cluster events in `gather-extra/artifacts/events.json`. Do not record an analysis gap for missing logs without first checking these directories.
 
 Use timeline ordering — not error-text similarity — to decide whether multiple failures are cascading (one root cause) or independent.
 
