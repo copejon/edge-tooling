@@ -143,6 +143,14 @@ def validate_entry(entry, index, file_cache):
         elif any(not isinstance(item, str) for item in val):
             errors.append(f"entry[{index}]: '{field}' items must all be strings")
 
+    scenarios = entry.get("scenarios")
+    layer = entry.get("stack_layer", "")
+    if isinstance(scenarios, list) and not scenarios and layer == "test":
+        errors.append(
+            f"entry[{index}]: 'scenarios' is empty but stack_layer is 'test' — "
+            "populate with the names of the failing test cases"
+        )
+
     return errors
 
 
