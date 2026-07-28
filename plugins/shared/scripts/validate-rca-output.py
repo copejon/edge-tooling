@@ -23,8 +23,8 @@ NON_EMPTY_STRING_FIELDS = {
     "step_name", "root_cause", "remediation",
 }
 
-# Keep in sync with prow-job-analyzer.md (field descriptions) and
-# lvms-ci/skills/prow-job/SKILL.md (severity guide / JSON schema).
+# Keep in sync with prow-job-analyzer.md (field descriptions,
+# severity rubric, and JSON schema) in each plugin.
 VALID_CONFIDENCE = {"high", "medium", "low"}
 VALID_STACK_LAYERS = {
     "AWS Infra", "External Infrastructure", "build phase", "deploy phase",

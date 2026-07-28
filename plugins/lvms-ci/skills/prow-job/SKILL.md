@@ -3,7 +3,7 @@ name: lvms-ci:prow-job
 argument-hint: <prow-job-url-or-artifacts-dir>
 description: Download Prow job artifacts, identify root cause of failure, and produce a structured error report
 user-invocable: true
-allowed-tools: Skill, Bash, Read, Write, Glob, Grep, Agent
+allowed-tools: Bash, Read, Write, Agent
 ---
 
 # lvms-ci:prow-job
