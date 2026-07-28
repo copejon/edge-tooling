@@ -70,6 +70,7 @@ Use timeline ordering — not error-text similarity — to decide whether multip
 1. There are many setup and teardown stages so fatal errors may be buried by log output from the teardown phase. It is not common to find the fatal error at the end of the log.
 2. You can quickly determine the failed step from the build-log.txt by reading the last `Running step ...` line before the container logs appear.
 3. Check the CatalogSource and operator setup steps (`lvms-catalogsource`, `operatorhub-subscribe-lvm-operator`, `storage-create-lvm-cluster`) early — if any failed, the operator was never fully deployed and all downstream test failures are secondary.
+4. For test failures, always read the integration test step's `build-log.txt` (`lvms-sno-integration-test` or `lvms-mno-integration-test`). Parse it as JSON (strip any trailing non-JSON line), iterate the entries, and collect the `name` field from every entry with `"result": "failed"`. These are the scenario names for the `scenarios` field. Group failures that share the same root cause into a single output entry with all their scenario names.
 
 ## JSON Schema
 
@@ -96,7 +97,7 @@ Each entry in the output array has exactly these fields:
   ],
   "confidence": "medium",
   "analysis_gaps": [],
-  "scenarios": []
+  "scenarios": ["[sig-storage] STORAGE Author:mmakwana-High-66241-[OTP][LVMS] Check workload management annotations are present in LVMS resources [Disruptive]"]
 }
 ```
 
@@ -116,7 +117,7 @@ Each entry in the output array has exactly these fields:
 - `causal_chain`: array of `{"cause", "evidence", "quote"}` — each link toward root cause. `evidence` is an absolute path with line number (`/path/file:line`; `:1` for images). `quote` is a short verbatim excerpt (empty for images). Re-read every cited `file:line` before finalizing. Aim for 2-4 links.
 - `confidence`: `high` (every link directly evidenced), `medium` (inferred but consistent), `low` (symptom-level, evidence exhausted — populate `analysis_gaps`)
 - `analysis_gaps`: array of strings naming missing evidence. Empty when nothing was skipped.
-- `scenarios`: array of scenario names where this failure occurred. Empty array for non-scenario failures.
+- `scenarios`: array of Ginkgo test names (`name` field from the integration test step's JSON build-log) affected by this failure. For `stack_layer: "test"` entries, parse the integration test step's `build-log.txt` as JSON and collect the `name` from each entry with `"result": "failed"` that matches this root cause. Empty array only for non-test failures (build, infra, deploy).
 
 ### Severity rubric
 
