@@ -43,7 +43,7 @@ Respond with a valid JSON array only — no prose, no markdown fences. One objec
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/lvms-catalogsource/build-log.txt`: CatalogSource creation step log.
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/operatorhub-subscribe-lvm-operator/build-log.txt`: LVMS operator subscription step log.
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/storage-create-lvm-cluster/build-log.txt`: LVMCluster creation step log.
-- `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/lvms-sno-integration-test/build-log.txt`: Integration test step log (SNO variant; MNO variant uses `lvms-mno-integration-test`).
+- `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/lvms-sno-integration-test/build-log.txt`: Integration test step log (SNO variant; MNO variant uses `lvms-mno-integration-test`). This file is a JSON array of test result objects (not plain text). Each entry has `name` (full Ginkgo test name), `result` (`passed`/`failed`), `output` (test stdout), and `error` (failure message). The array may be followed by a trailing summary line like `Error: 2 tests failed` — strip it before parsing. Use the `name` field of failed entries to populate `scenarios`.
 
 ## Important Links
 
