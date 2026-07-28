@@ -2,7 +2,7 @@
   "hooks": {
     "SubagentStop": [
       {
-        "matcher": "prow-job-analyzer",
+        "matcher": "microshift-ci:prow-job-analyzer",
         "hooks": [
           {
             "type": "command",
