@@ -67,35 +67,24 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
 - If a release has no failed jobs, its jobs JSON will be an empty array — skip analysis for that release
 - If a release has an `"error"` field in the JSON summary, data collection failed for that release — report the error to the user but continue with other releases
 
-### Step 2: Analyze Each Job Using /lvms-ci:prow-job
+### Step 2: Analyze Each Job Using prow-job-analyzer Agent
 
 **Goal**: Get detailed root cause analysis for each failed job using pre-downloaded artifacts.
 
 **Actions**:
 
-1. Use the JSON summary output from Step 1 to build agent prompts. Do NOT read the job JSON files into the main conversation — the prepare script already printed all job details (artifacts_dir, build_id, job name) and agents receive artifacts_dir directly in their prompt.
-2. For **every** failed job across all releases and PRs, launch a separate **Agent** (using the `Agent` tool, NOT the `Skill` tool). For PR jobs, only launch agents for jobs with FAILURE status.
+1. Use the JSON summary output from Step 1 to build agent prompts. Do NOT read the job JSON files into the main conversation — the prepare script already printed all job details (artifacts_dir, build_id, job name, url) and agents receive these directly in their prompt.
+2. For **every** failed job across all releases and PRs, launch a separate **Agent** (using the `Agent` tool, NOT the `Skill` tool) with `subagent_type=lvms-ci:prow-job-analyzer`. For PR jobs, only launch agents for jobs with FAILURE status.
 
-   **For release jobs:**
+   The agent returns a JSON array directly — no extraction needed. Build the prompt with the job's `artifacts_dir`, `url` (as `job_url`), and `job` (as `job_name`) from the prepare output.
 
-   ```text
-   Agent: subagent_type=general_purpose, prompt="Analyze this Prow job and save the report:
-   1. Run /lvms-ci:prow-job <ARTIFACTS_DIR>
-   2. After the analysis completes, extract only the JSON array from the output
-      and save it to:
-      <WORKDIR>/jobs/release-<RELEASE>-job-<N>-<JOB_ID>.json
-      Use the Write tool. The file must contain ONLY the valid JSON array — no prose, no markers."
-   ```
-
-   **For PR jobs:**
+   **Example prompt:**
 
    ```text
-   Agent: subagent_type=general_purpose, prompt="Analyze this Prow job and save the report:
-   1. Run /lvms-ci:prow-job <ARTIFACTS_DIR>
-   2. After the analysis completes, extract only the JSON array from the output
-      and save it to:
-      <WORKDIR>/jobs/prs-job-<N>-pr<PR_NUMBER>-<JOB_NAME_SUFFIX>.json
-      Use the Write tool. The file must contain ONLY the valid JSON array — no prose, no markers."
+   Analyze this prow job:
+   artifacts_dir: <ARTIFACTS_DIR>
+   job_url: <JOB_URL>
+   job_name: <JOB_NAME>
    ```
 
    After each agent completes, save its JSON response to the corresponding file using the Write tool:
@@ -171,7 +160,8 @@ Z-stream test results are collected automatically when `--pull-requests` is pass
 
 ## Related Skills
 
-- **lvms-ci:prow-job**: Single job analysis (used by Step 2 agents)
+- **lvms-ci:prow-job**: Single job analysis (thin wrapper around the `lvms-ci:prow-job-analyzer` agent)
+- **lvms-ci:prow-job-analyzer**: Dedicated agent for root cause analysis of a single prow job (used directly by Step 2)
 
 ## Notes
 
