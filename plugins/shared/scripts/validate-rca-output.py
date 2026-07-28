@@ -20,7 +20,7 @@ REQUIRED_FIELDS = {
 
 NON_EMPTY_STRING_FIELDS = {
     "error_signature", "raw_error", "job_url", "job_name", "finished",
-    "step_name", "root_cause", "remediation",
+    "step_name", "root_cause", "remediation", "release",
 }
 
 # Keep in sync with prow-job-analyzer.md (field descriptions,
@@ -76,8 +76,8 @@ def validate_evidence(evidence, quote, prefix, file_cache):
     if line_no < 1 or line_no > len(lines):
         return [f"{prefix}: evidence cites line {line_no} but file has only {len(lines)} lines"]
 
-    if not isinstance(quote, str) or len(quote) < 10:
-        return []
+    if not isinstance(quote, str) or not quote:
+        return [f"{prefix}: 'quote' must be a non-empty string"]
 
     cited_line = " ".join(lines[line_no - 1].split()).lower()
     normalized_quote = " ".join(quote.split()).lower()
@@ -117,10 +117,7 @@ def validate_entry(entry, index, file_cache):
 
     chain = entry.get("causal_chain")
     if not isinstance(chain, list):
-        if chain is not None:
-            errors.append(f"entry[{index}]: 'causal_chain' must be an array")
-        else:
-            errors.append(f"entry[{index}]: 'causal_chain' must be a non-empty array, got null")
+        errors.append(f"entry[{index}]: 'causal_chain' must be a non-empty array, got {type(chain).__name__}")
     elif not chain:
         errors.append(f"entry[{index}]: 'causal_chain' must be a non-empty array")
     else:
@@ -128,12 +125,10 @@ def validate_entry(entry, index, file_cache):
             if not isinstance(link, dict):
                 errors.append(f"entry[{index}].causal_chain[{ci}]: must be an object")
                 continue
-            if "cause" not in link:
-                errors.append(f"entry[{index}].causal_chain[{ci}]: missing required key 'cause'")
-            if "evidence" not in link:
-                errors.append(f"entry[{index}].causal_chain[{ci}]: missing required key 'evidence'")
-            if "quote" not in link:
-                errors.append(f"entry[{index}].causal_chain[{ci}]: missing required key 'quote'")
+            for key in ("cause", "evidence", "quote"):
+                val = link.get(key)
+                if not isinstance(val, str) or not val:
+                    errors.append(f"entry[{index}].causal_chain[{ci}]: '{key}' must be a non-empty string")
             evidence = link.get("evidence", "")
             quote = link.get("quote", "")
             if isinstance(evidence, str) and evidence:
@@ -143,8 +138,10 @@ def validate_entry(entry, index, file_cache):
 
     for field in ("analysis_gaps", "scenarios"):
         val = entry.get(field)
-        if val is not None and not isinstance(val, list):
-            errors.append(f"entry[{index}]: '{field}' must be an array")
+        if not isinstance(val, list):
+            errors.append(f"entry[{index}]: '{field}' must be an array, got {type(val).__name__}")
+        elif any(not isinstance(item, str) for item in val):
+            errors.append(f"entry[{index}]: '{field}' items must all be strings")
 
     return errors
 
