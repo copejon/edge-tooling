@@ -17,6 +17,7 @@ Automate MicroShift release testing activities — from pre-release evaluation t
 | `/microshift-release:release-versions` | Pre-Check (Phase 0) | Check if a MicroShift version is available and where to find RPMs, bootc images, and Brew builds |
 | `/microshift-release:validate-artifacts` | Build Validation (Phase 1) | Validate MicroShift built artifacts (RPMs and bootc images) produced by ART |
 | `/microshift-release:automated-testing` | Automated Testing (Phase 2) | Run the full Prow CI release testing workflow — create PR, trigger jobs, check status, download and upload artifacts |
+| `/microshift-release:advisory-promotion` | Advisory Promotion (Phase 3) | Validate Konflux bootc advisory promotion for QE sign-off — verify advisory YAML, catalog presence, shipment MR, and commit provenance |
 
 ## Roadmap
 
@@ -26,7 +27,7 @@ Automate MicroShift release testing activities — from pre-release evaluation t
 | Pre-Check (Phase 0) | `release-versions` | Done |
 | Build Validation (Phase 1) | `validate-artifacts` | Done |
 | Automated Testing (Phase 2) | `automated-testing` | Done |
-| Advisory Promotion (Phase 3) | `advisory-promotion` | Planned |
+| Advisory Promotion (Phase 3) | `advisory-promotion` | Done |
 | Post-Release (Phase 4) | `post-release` | Planned |
 
 ## Requirements
