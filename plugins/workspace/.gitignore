@@ -1,0 +1,21 @@
+# This repo is the `workspace` Claude Code plugin. Repos, dev-env.yaml, and
+# projects/ are created in a user's *workspace* (elsewhere), not here — so
+# they are not ignored in the plugin tree.
+
+# Editor/IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings (developer-specific, not shared)
+.claude/settings.local.json
+
+# Scratch / working files
+.work/
+auth.json

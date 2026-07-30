@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "workspace",
+  "displayName": "Multi-Repo Workspace Manager",
+  "version": "0.1.1",
+  "description": "Bootstrap and manage multi-repo dev environments for AI-assisted development: clone repos from a domain, layer per-repo Claude context, and track work in structured project workspaces.",
+  "author": {
+    "name": "fonta-rh"
+  },
+  "homepage": "https://github.com/openshift-eng/edge-tooling",
+  "license": "Apache-2.0"
+}
