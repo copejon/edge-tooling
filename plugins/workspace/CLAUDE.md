@@ -23,7 +23,7 @@ Two roots are kept strictly separate:
 
 ## Layout
 
-```
+```text
 .claude-plugin/{plugin.json, marketplace.json}   Plugin + marketplace manifests
 skills/<name>/SKILL.md                            8 skills (workspace: prefix)
 skills/create-domain/context-template.md          Context-file template

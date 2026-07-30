@@ -14,14 +14,14 @@ OpenShift components) — or build your own for any domain.
 
 From inside Claude Code:
 
-```
+```text
 /plugin marketplace add openshift-eng/edge-tooling
 /plugin install workspace@edge-tooling
 ```
 
 ## Quick Start
 
-```
+```text
 /workspace:setup-environment
 ```
 

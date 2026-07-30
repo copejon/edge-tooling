@@ -215,7 +215,11 @@ PYEOF
         return 0
     fi
 
-    echo "|||"
+    log_error "Cannot read domain config: no YAML parser available."
+    log_info "Install one of the following:"
+    log_info "  yq          — https://github.com/mikefarah/yq"
+    log_info "  python3-pyyaml — dnf install python3-pyyaml  (or pip install pyyaml)"
+    return 1
 }
 
 # Returns 0 if a dev-env.yaml declares a top-level self: block (single-repo
@@ -451,7 +455,7 @@ show_status() {
             last_commit="-"
         fi
 
-        printf "%-30s $(echo -e $status)%-1s %-20s %s\n" "$dir" "" "$branch_info" "$last_commit"
+        printf "%-30s $(echo -e "$status")%-1s %-20s %s\n" "$dir" "" "$branch_info" "$last_commit"
     }
     iterate_repos _status_callback
 }
@@ -462,7 +466,7 @@ list_repos() {
     printf "%-30s %-10s %-50s %-12s\n" "DIRECTORY" "CATEGORY" "URL" "BRANCH"
     printf "%-30s %-10s %-50s %-12s\n" "---------" "--------" "---" "------"
 
-    while IFS='|' read -r url dir branch name cat summary; do
+    while IFS='|' read -r url dir branch name cat _summary; do
         [[ -z "$url" ]] && continue
         local short_url="${url#https://github.com/}"
         printf "%-30s %-10s %-50s %-12s\n" "$dir" "$cat" "$short_url" "$branch"
@@ -560,7 +564,13 @@ fetch_external_domain() {
         if [[ ! -d "$pack_dir" ]]; then
             log_error "Subdirectory '$subdir' not found in $url"
             log_info "Directories available in the pack repo:"
-            ls "$tmp_dir/pack/" 2>/dev/null | grep -v '^\.' | sed 's/^/  /' || true
+            for d in "$tmp_dir/pack"/*/; do
+                [[ -d "$d" ]] || continue
+                local dname
+                dname="$(basename "$d")"
+                [[ "$dname" == .* ]] && continue
+                echo "  $dname"
+            done
             rm -rf "$tmp_dir"
             exit 1
         fi
@@ -666,7 +676,7 @@ merge_settings_template() {
     fi
 
     local result
-    result=$(python3 - "$target" "$template" << 'PYEOF'
+    if ! result=$(python3 - "$target" "$template" << 'PYEOF'
 import json, sys
 
 target_path, template_path = sys.argv[1], sys.argv[2]
@@ -703,7 +713,10 @@ if changed:
 else:
     print("__NO_CHANGES__")
 PYEOF
-    )
+    ); then
+        log_error "Failed to merge settings template"
+        return 1
+    fi
 
     if [[ "$result" == "__NO_CHANGES__" ]]; then
         log_success ".claude/settings.local.json already up to date"
