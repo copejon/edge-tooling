@@ -234,7 +234,14 @@ def main() -> None:
             action = "already_workspace"
         else:
             dest = root / "domains" / domain_name
-            shutil.copytree(domain_dir, dest)
+            try:
+                shutil.copytree(domain_dir, dest)
+            except (OSError, shutil.Error) as exc:
+                print(json.dumps({
+                    "status": "error",
+                    "error": f"Failed to copy domain to workspace: {exc}",
+                }))
+                return
             domain_dir = dest
             action = "copied"
         report = build_domain_report(domain_name, domain_dir, root, source_block)

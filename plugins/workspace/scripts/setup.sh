@@ -163,16 +163,16 @@ parse_yaml_repos() {
     fi
 
     if python3 -c "import yaml" 2>/dev/null; then
-        python3 -c "
+        python3 - "$yaml_file" << 'PYEOF'
 import yaml, sys
-with open('$yaml_file') as f:
+with open(sys.argv[1]) as f:
     data = yaml.safe_load(f)
 for r in data.get('repos', []):
     print('|'.join([
         r.get('url',''), r.get('directory', r.get('name','')), r.get('branch','main'),
         r.get('name',''), r.get('category',''), r.get('summary','')
     ]))
-" 2>/dev/null
+PYEOF
         return $?
     fi
 
@@ -189,9 +189,9 @@ parse_yaml_domain() {
     local yaml_file="${1:-$DEV_ENV_YAML}"
 
     if python3 -c "import yaml" 2>/dev/null; then
-        python3 -c "
-import yaml
-with open('$yaml_file') as f:
+        python3 - "$yaml_file" << 'PYEOF'
+import yaml, sys
+with open(sys.argv[1]) as f:
     data = yaml.safe_load(f)
 p = data.get('domain', {})
 if isinstance(p, str):
@@ -201,7 +201,7 @@ elif not isinstance(p, dict):
 print('|'.join([
     p.get('name',''), p.get('source','bundled'), p.get('ref',''), p.get('subdir','')
 ]))
-" 2>/dev/null
+PYEOF
         return 0
     fi
 
@@ -257,14 +257,22 @@ detect_repo_source() {
 
 iterate_repos() {
     local callback="$1"
-
+    local repo_lines
+    repo_lines=$(parse_yaml_repos "$REPO_SOURCE") || {
+        log_error "Failed to parse repositories from $REPO_SOURCE"
+        return 1
+    }
+    if [[ -z "$repo_lines" ]]; then
+        log_warn "No repositories found in $REPO_SOURCE"
+        return 0
+    fi
     while IFS='|' read -r url dir branch _name _cat _summary; do
         if [[ -z "$url" || -z "$dir" ]]; then
             [[ -n "$_name" || -n "$url" ]] && log_warn "Skipping entry with missing url or name: ${_name:-${url:-unknown}}"
             continue
         fi
         "$callback"
-    done < <(parse_yaml_repos "$REPO_SOURCE")
+    done <<< "$repo_lines"
 }
 
 # ─── Clone / Update ──────────────────────────────────────────────────────────
@@ -354,15 +362,12 @@ update_repo() {
 
     log_info "Updating $dir..."
 
-    cd "$target"
-
-    if ! git diff --quiet HEAD 2>/dev/null; then
+    if ! git -C "$target" diff --quiet HEAD 2>/dev/null; then
         log_warn "  $dir has local changes, stashing..."
-        git stash
+        git -C "$target" stash
     fi
 
-    git pull --rebase
-    cd "$WORKSPACE_ROOT_RESOLVED"
+    git -C "$target" pull --rebase
 
     log_success "Updated $dir"
 }
@@ -437,11 +442,9 @@ show_status() {
         local status branch_info last_commit
 
         if [[ -d "$target/.git" ]]; then
-            cd "$target"
             status="${GREEN}cloned${NC}"
-            branch_info="$(git branch --show-current 2>/dev/null || echo 'detached')"
-            last_commit="$(git log -1 --format='%h %s' 2>/dev/null | cut -c1-40)"
-            cd "$WORKSPACE_ROOT_RESOLVED"
+            branch_info="$(git -C "$target" branch --show-current 2>/dev/null || echo 'detached')"
+            last_commit="$(git -C "$target" log -1 --format='%h %s' 2>/dev/null | cut -c1-40)"
         else
             status="${YELLOW}not cloned${NC}"
             branch_info="-"
@@ -503,12 +506,12 @@ get_domain_name_from_dir() {
     local domain_dir="$1"
 
     if python3 -c "import yaml" 2>/dev/null; then
-        python3 -c "
-import yaml
-with open('$domain_dir/domain.yaml') as f:
+        python3 - "$domain_dir/domain.yaml" << 'PYEOF'
+import yaml, sys
+with open(sys.argv[1]) as f:
     data = yaml.safe_load(f)
 print(data.get('name', ''))
-" 2>/dev/null
+PYEOF
         return 0
     fi
 
@@ -555,10 +558,10 @@ fetch_external_domain() {
     if [[ -n "$subdir" ]]; then
         pack_dir="$tmp_dir/pack/$subdir"
         if [[ ! -d "$pack_dir" ]]; then
-            rm -rf "$tmp_dir"
             log_error "Subdirectory '$subdir' not found in $url"
             log_info "Directories available in the pack repo:"
             ls "$tmp_dir/pack/" 2>/dev/null | grep -v '^\.' | sed 's/^/  /' || true
+            rm -rf "$tmp_dir"
             exit 1
         fi
     fi

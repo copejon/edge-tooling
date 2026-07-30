@@ -168,6 +168,8 @@ def build_replacement(section: Section, today: str) -> list[str]:
     if len(checked) > KEEP_RECENT:
         for item in checked[:-KEEP_RECENT]:
             to_archive_set.add(item.line_idx)
+    for item in section.strikethrough:
+        to_archive_set.add(item.line_idx)
 
     archived_count = len(to_archive_set)
     pointer = f"_Earlier items consolidated in `{ARCHIVE_FILENAME}` ({archived_count} items, {today})._"
@@ -194,7 +196,7 @@ def consolidate(project_dir: Path, dry_run: bool = False) -> dict[str, Any]:
     if not claude_md.is_file():
         return {
             "status": "error",
-            "message": f"No CLAUDE.md found in {project_dir}",
+            "error": f"No CLAUDE.md found in {project_dir}",
         }
 
     text = claude_md.read_text()
@@ -210,7 +212,7 @@ def consolidate(project_dir: Path, dry_run: bool = False) -> dict[str, Any]:
             "status": "already_lean",
             "project": project_name,
             "claude_md_lines": len(lines),
-            "message": f"Nothing to consolidate ({total_checked} completed items across all sections, none exceeding threshold of {THRESHOLD}).",
+            "error": f"Nothing to consolidate ({total_checked} completed items across all sections, none exceeding threshold of {THRESHOLD}).",
             "sections": [],
         }
 
@@ -337,27 +339,27 @@ def main():
     if not args:
         print(json.dumps({
             "status": "error",
-            "message": "Usage: consolidate-project.py [--dry-run] <project-name>",
+            "error": "Usage: consolidate-project.py [--dry-run] <project-name>",
         }))
-        sys.exit(1)
+        sys.exit(0)
 
     project_name = args[0]
     root = workspace_lib.resolve_workspace_root()
     if root is None:
         print(json.dumps({
             "status": "error",
-            "message": "Could not determine the workspace root. Set WORKSPACE_ROOT "
+            "error": "Could not determine the workspace root. Set WORKSPACE_ROOT "
                        "or run inside a workspace (a directory containing dev-env.yaml).",
         }))
-        sys.exit(1)
+        sys.exit(0)
     project_dir = root / "projects" / project_name
 
     if not project_dir.is_dir():
         print(json.dumps({
             "status": "error",
-            "message": f"Project directory not found: {project_dir}",
+            "error": f"Project directory not found: {project_dir}",
         }))
-        sys.exit(1)
+        sys.exit(0)
 
     result = consolidate(project_dir, dry_run=dry_run)
     print(json.dumps(result, indent=2))
