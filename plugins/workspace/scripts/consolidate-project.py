@@ -218,7 +218,7 @@ def consolidate(project_dir: Path, dry_run: bool = False) -> dict[str, Any]:
 
     section_info = []
     for s in qualifying:
-        to_archive = max(0, len(s.checked) - KEEP_RECENT)
+        to_archive = max(0, len(s.checked) - KEEP_RECENT) + len(s.strikethrough)
         section_info.append({
             "name": s.name,
             "checked": len(s.checked),

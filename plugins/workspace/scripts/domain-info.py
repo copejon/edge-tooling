@@ -237,6 +237,8 @@ def main() -> None:
             try:
                 shutil.copytree(domain_dir, dest)
             except (OSError, shutil.Error) as exc:
+                if dest.exists():
+                    shutil.rmtree(dest, ignore_errors=True)
                 print(json.dumps({
                     "status": "error",
                     "error": f"Failed to copy domain to workspace: {exc}",
