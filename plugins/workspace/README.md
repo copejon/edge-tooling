@@ -15,8 +15,8 @@ OpenShift components) — or build your own for any domain.
 From inside Claude Code:
 
 ```
-/plugin marketplace add fonta-rh/multi-repo-dev-env
-/plugin install workspace@multi-repo-dev-env
+/plugin marketplace add openshift-eng/edge-tooling
+/plugin install workspace@edge-tooling
 ```
 
 ## Quick Start
