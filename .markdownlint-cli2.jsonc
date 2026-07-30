@@ -12,6 +12,8 @@
   ],
   "ignores": [
     "node_modules/**",
-    "two-node-toolbox/**"
+    "two-node-toolbox/**",
+    "plugins/workspace/domains/**",
+    "plugins/workspace/skills/**"
   ]
 }

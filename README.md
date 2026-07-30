@@ -11,7 +11,7 @@ Automation, AI skills, and deployment tools for OpenShift edge engineering. This
 | Single Node OpenShift with DU config | [sno-deploy/](sno-deploy/) |
 | LVM Operator development workspace | [environments/lvm-operator/](environments/lvm-operator/) |
 | Nightly payload health monitoring | [payload-monitor/](payload-monitor/) |
-| Multi-repo development environment | [multi-repo-development/](multi-repo-development/) |
+| Multi-repo workspace management | [workspace plugin](plugins/workspace/) via the marketplace |
 | Claude Code plugins for edge workflows | [plugins/](plugins/) via the marketplace |
 
 ## Getting started
@@ -60,6 +60,7 @@ Then enable whichever plugins you need. See the [plugin README](plugins/README.m
 | [skills-review](plugins/skills-review/) | Lint SKILL.md files for quality and correctness |
 | [threat-model](plugins/threat-model/) | Security threat analysis for OpenShift PRs |
 | [two-node](plugins/two-node/) | Two-node topology workflow automation — RHEL verification, Jira integration |
+| [workspace](plugins/workspace/) | Multi-repo workspace manager for cross-project AI-assisted development |
 
 ## Deployment Tools
 
@@ -70,7 +71,6 @@ Then enable whichever plugins you need. See the [plugin README](plugins/README.m
 | [sno-deploy/](sno-deploy/) | Deploy Single Node OpenShift with DU configuration |
 | [payload-monitor/](payload-monitor/) | Nightly payload health monitoring for edge topologies |
 | [environments/lvm-operator/](environments/lvm-operator/) | Development workspace for the LVM Storage operator |
-| [multi-repo-development/](multi-repo-development/) | Multi-repo development environment for cross-project work |
 
 ## Documentation
 
