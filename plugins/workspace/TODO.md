@@ -1,6 +1,26 @@
 # Workspace Plugin — Post-Migration Cleanup
 
-Findings from CodeRabbit review on PR #249 that are worth addressing.
+Findings from reviews on PR #249 that are worth addressing.
+
+## Medium
+
+- **`scripts/resume-project.py` — restore bounds check**
+  The old `if not names: return "no_projects"` guard was removed. Numeric
+  arg on empty workspace now shows confusing "out of range (1-0)" instead
+  of "No recent projects found."
+
+- **`scripts/consolidate-project.py:314` — non-atomic write**
+  `write_text()` can truncate the project CLAUDE.md on crash. Use
+  `tempfile` + `os.replace()` for atomic writes.
+
+- **Consolidate `parse_frontmatter()` into `workspace_lib.py`**
+  6 copies across `domain-info.py`, `resume-project.py`, `skills.py`
+  with subtle behavioral differences (e.g. `skills.py` catches
+  `UnicodeDecodeError` but doesn't coerce datetime; others do the
+  opposite).
+
+- **Add tests for `consolidate-project.py` and `resume-project.py`**
+  3 of 5 scripts are covered; these two are not.
 
 ## Low
 
