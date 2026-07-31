@@ -237,10 +237,17 @@ def main() -> None:
             try:
                 shutil.copytree(domain_dir, dest)
             except (OSError, shutil.Error) as exc:
-                print(json.dumps({
-                    "status": "error",
-                    "error": f"Failed to copy domain to workspace: {exc}",
-                }))
+                cleanup_ok = True
+                if dest.exists():
+                    try:
+                        shutil.rmtree(dest)
+                    except OSError:
+                        cleanup_ok = False
+                msg = f"Failed to copy domain to workspace: {exc}"
+                if not cleanup_ok:
+                    msg += (f" (warning: partial directory at {dest} could not be"
+                            " removed — delete it manually before retrying)")
+                print(json.dumps({"status": "error", "error": msg}))
                 return
             domain_dir = dest
             action = "copied"
