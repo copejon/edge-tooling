@@ -146,10 +146,11 @@ def build_archive_block(section: Section, today: str) -> str:
     to_archive = checked[:-KEEP_RECENT] if len(checked) > KEEP_RECENT else checked
     strikethroughs = section.strikethrough
 
+    total_archived = len(to_archive) + len(strikethroughs)
     lines = [
         f"## {section.name} (archived {today})",
         "",
-        f"{len(to_archive)} completed items archived from CLAUDE.md.",
+        f"{total_archived} items archived from CLAUDE.md.",
         "",
     ]
     for item in to_archive:
