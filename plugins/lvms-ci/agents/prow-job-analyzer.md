@@ -43,7 +43,7 @@ Respond with a valid JSON array only — no prose, no markdown fences. One objec
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/lvms-catalogsource/build-log.txt`: CatalogSource creation step log.
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/operatorhub-subscribe-lvm-operator/build-log.txt`: LVMS operator subscription step log.
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/storage-create-lvm-cluster/build-log.txt`: LVMCluster creation step log.
-- `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/lvms-sno-integration-test/build-log.txt`: Integration test step log (SNO variant; MNO variant uses `lvms-mno-integration-test`). This file is a JSON array of test result objects (not plain text). Each entry has `name` (full Ginkgo test name), `result` (`passed`/`failed`), `output` (test stdout), and `error` (failure message). The array may be followed by a trailing summary line like `Error: 2 tests failed` — strip it before parsing. Use the `name` field of failed entries to populate `scenarios`.
+- `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/lvms-sno-integration-test/build-log.txt`: Integration test step log (SNO variant; MNO variant uses `lvms-mno-integration-test`). This file is a JSON array of test result objects (not plain text). Each entry has `name` (full Ginkgo test name), `result` (`passed`/`failed`), `output` (test stdout), and `error` (failure message). The array may be followed by a trailing summary line like `Error: 2 tests failed` — strip it before parsing. Use the `name` field of failed entries to populate `scenarios`. Group failures that share the same root cause into a single output entry with all their scenario names.
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/gather-extra/artifacts/pods/`: Pod logs collected at the end of the test run. Filenames follow the pattern `<namespace>_<pod-name>_<container>.log` (and `_previous.log` for previous container instances). LVMS operator and component logs are under `openshift-lvm-storage_*`. Check these when the failure involves operator components (vg-manager, lvms-operator, topolvm-controller, topolvm-node).
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/gather-extra/artifacts/events.json`: Cluster events collected at test end — contains Kubernetes events including LVMS-specific events like `InconsistentLVs`, `VGsDegraded`, and `ResourceReconciliationIncomplete`.
 - `<ARTIFACTS_DIR>/artifacts/<TEST_NAME>/gather-extra/artifacts/oc_cmds/`: Outputs of diagnostic `oc` commands (e.g., `oc get nodes`, `oc get pods`).
@@ -74,8 +74,7 @@ Use timeline ordering — not error-text similarity — to decide whether multip
 
 1. There are many setup and teardown stages so fatal errors may be buried by log output from the teardown phase. It is not common to find the fatal error at the end of the log.
 2. You can quickly determine the failed step from the build-log.txt by reading the last `Running step ...` line before the container logs appear.
-3. Check the CatalogSource and operator setup steps (`lvms-catalogsource`, `operatorhub-subscribe-lvm-operator`, `storage-create-lvm-cluster`) early — if any failed, the operator was never fully deployed and all downstream test failures are secondary.
-4. For test failures, always read the integration test step's `build-log.txt` (`lvms-sno-integration-test` or `lvms-mno-integration-test`). Parse it as JSON (strip any trailing non-JSON line), iterate the entries, and collect the `name` field from every entry with `"result": "failed"`. These are the scenario names for the `scenarios` field. Group failures that share the same root cause into a single output entry with all their scenario names.
+3. For test failures, always read the integration test step's `build-log.txt` first — see Important Files for the format and parsing rules.
 
 ## JSON Schema
 
