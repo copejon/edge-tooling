@@ -17,6 +17,7 @@ from .models import (
 )
 from .collectors import jira as jira_collector
 from .collectors.jira import has_auth as jira_has_auth
+from .collectors.sippy import job_analysis_url
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,9 @@ def _find_escalation_risks(
 
         for job_name, topology in informing_jobs.items():
             consecutive = 0
+            latest_prow_url = ""
+            latest_failure_seen = False
+            streak_runs: list[dict] = []
             for payload in reversed_payloads:
                 job_in_payload = None
                 for job in payload.jobs:
@@ -87,21 +91,28 @@ def _find_escalation_risks(
                         job_in_payload = job
                         break
                 if job_in_payload is None:
-                    # Job absent from this payload breaks the streak
                     break
                 if job_in_payload.result == JobResult.FAILURE:
                     consecutive += 1
+                    streak_runs.append({
+                        "payload_tag": payload.tag,
+                        "prow_url": job_in_payload.prow_url,
+                    })
+                    if not latest_failure_seen:
+                        latest_prow_url = job_in_payload.prow_url
+                        latest_failure_seen = True
                 else:
                     break
 
             if consecutive >= config.escalation_threshold:
-                sippy_url = f"https://sippy.dptools.openshift.org/sippy-ng/jobs/{job_name}"
                 risks.append(EscalationRisk(
                     job_name=job_name,
                     topology=topology,
                     version=stream.version,
                     consecutive_failures=consecutive,
-                    sippy_url=sippy_url,
+                    prow_url=latest_prow_url,
+                    triage_url=job_analysis_url(stream.version, job_name),
+                    failing_runs=streak_runs,
                 ))
 
     return risks

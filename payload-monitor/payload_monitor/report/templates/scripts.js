@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', function() {
 // Filter functionality
 document.addEventListener('DOMContentLoaded', function() {
   const filterBtns = document.querySelectorAll('.filter-btn');
-  const jobRows = document.querySelectorAll('.job-row');
   const detailRows = document.querySelectorAll('.detail-row');
   const crRows = document.querySelectorAll('.cr-row');
   const regressionRows = document.querySelectorAll('.regression-row');
@@ -63,12 +62,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   const INITIAL_VISIBLE = 5;
   const sectionVisibleLimit = { anomalies: 10 };
-  const sectionsCollapsed = { jobs: true, details: true, regressions: true, cr: true, anomalies: true };
-  const sectionSelectors = { jobs: '.job-row', details: '.detail-row', regressions: '.regression-row', cr: '.cr-row', anomalies: '.anomaly-row' };
-  const sectionLabels = { jobs: ' failing jobs', details: ' failure details', regressions: ' regressions', cr: ' component regressions', anomalies: ' anomalies' };
+  const sectionsCollapsed = { details: true, regressions: true, cr: true, anomalies: true };
+  const sectionSelectors = { details: '.detail-row', regressions: '.regression-row', cr: '.cr-row', anomalies: '.anomaly-row' };
+  const sectionLabels = { details: ' failure details', regressions: ' regressions', cr: ' component regressions', anomalies: ' anomalies' };
 
   // Count rows that pass the current filter (inline style.display is set by filters,
-  // collapsed-row class is separate — so style.display !== 'none' means "passes filter")
+  // collapsed-row class is separate - so style.display !== 'none' means "passes filter")
   function countFiltered(selector) {
     let count = 0;
     document.querySelectorAll(selector).forEach(row => {
@@ -81,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
     Object.entries(sectionSelectors).forEach(([section, selector]) => {
       let visibleIdx = 0;
       document.querySelectorAll(selector).forEach(row => {
-        // Skip rows hidden by filters — don't count them toward the visible limit
+        // Skip rows hidden by filters - don't count them toward the visible limit
         if (row.style.display === 'none') {
           row.classList.remove('collapsed-row');
           return;
@@ -117,19 +116,15 @@ document.addEventListener('DOMContentLoaded', function() {
   function applyFilters() {
     function isVisible(row) {
       for (const [group, values] of Object.entries(activeFilters)) {
+        if (!(group in row.dataset)) continue;
         const rowValue = row.dataset[group];
-        if (!rowValue) continue;
-        const rowValues = rowValue.split(' ');
+        const rowValues = rowValue ? rowValue.split(' ') : [];
         if (!rowValues.some(v => values.has(v))) {
           return false;
         }
       }
       return true;
     }
-
-    jobRows.forEach(row => {
-      row.style.display = isVisible(row) ? '' : 'none';
-    });
 
     detailRows.forEach(row => {
       row.style.display = isVisible(row) ? '' : 'none';
@@ -162,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateExpandButtons();
 
     // Update header count
-    const visibleCount = countFiltered('.job-row');
+    const visibleCount = countFiltered('.detail-row');
     const countEl = document.getElementById('visible-count');
     if (countEl) countEl.textContent = visibleCount;
   }
@@ -178,25 +173,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updateExpandButtons();
   };
 
-  // "View Details" links: expand both sections, open the target detail, scroll to it
-  document.querySelectorAll('.detail-link').forEach(link => {
-    link.addEventListener('click', function(e) {
-      e.preventDefault();
-      // Expand both sections so the target is visible
-      sectionsCollapsed.jobs = false;
-      sectionsCollapsed.details = false;
-      applyCollapse();
-      updateExpandButtons();
-
-      const targetId = this.getAttribute('href').substring(1);
-      const detail = document.getElementById(targetId);
-      if (detail) {
-        detail.open = true;
-        detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
-  });
-
   // Column sorting for any table with sortable headers
   const sortableHeaders = document.querySelectorAll('th.sortable');
   sortableHeaders.forEach(th => {
@@ -208,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const col = parseInt(this.dataset.col);
       const rows = Array.from(tbody.querySelectorAll('tr'));
 
-      // Toggle sort direction — only clear siblings in the same table
+      // Toggle sort direction - only clear siblings in the same table
       const isAsc = this.classList.contains('asc');
       table.querySelectorAll('th.sortable').forEach(h => { h.classList.remove('asc', 'desc'); });
       this.classList.add(isAsc ? 'desc' : 'asc');
@@ -245,6 +221,43 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.classList.remove('copied');
       }, 2000);
     });
+  };
+
+  // Click-to-copy on action cell and claude-suggestion code elements
+  document.querySelectorAll('.action-cell code, .claude-suggestion code, .claude-cmd-popup code').forEach(function(code) {
+    code.style.cursor = 'pointer';
+    code.addEventListener('click', function(e) {
+      var text = code.textContent.trim();
+      navigator.clipboard.writeText(text).then(function() {
+        var tooltip = document.createElement('span');
+        tooltip.className = 'copy-tooltip';
+        tooltip.textContent = 'Copied!';
+        tooltip.style.left = e.clientX + 'px';
+        tooltip.style.top = e.clientY + 'px';
+        document.body.appendChild(tooltip);
+        setTimeout(function() { tooltip.remove(); }, 1500);
+      });
+    });
+  });
+
+  // Scroll to a job row and open it. Matches by job name.
+  window.scrollToJob = function(jobName) {
+    var rows = document.querySelectorAll('details.detail-row');
+    var row = null;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].dataset.jobName === jobName) { row = rows[i]; break; }
+    }
+    if (row) {
+      if (row.classList.contains('collapsed-row')) {
+        sectionsCollapsed.details = false;
+        applyCollapse();
+        updateExpandButtons();
+      }
+      row.open = true;
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.querySelector('summary').style.background = 'rgba(210,153,34,0.15)';
+      setTimeout(function() { row.querySelector('summary').style.background = ''; }, 2000);
+    }
   };
 
   // Draggable column resizers
@@ -290,6 +303,90 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // Detail grid sorting (failure analysis section)
+  const gridHeader = document.querySelector('.detail-grid-header');
+  if (gridHeader) {
+    const cellClasses = ['detail-cell-job', 'detail-cell-version', 'detail-cell-payload', 'detail-cell-topology', 'detail-cell-type', 'detail-cell-recurrence', 'detail-cell-date'];
+    const sortableCols = gridHeader.querySelectorAll('[data-sort-col]');
+
+    sortableCols.forEach(col => {
+      col.addEventListener('click', function() {
+        const colIdx = parseInt(this.dataset.sortCol);
+        const isAsc = this.classList.contains('asc');
+        sortableCols.forEach(c => c.classList.remove('asc', 'desc'));
+        this.classList.add(isAsc ? 'desc' : 'asc');
+        const dir = isAsc ? -1 : 1;
+
+        const rows = Array.from(document.querySelectorAll('details.detail-row'));
+        const cellClass = cellClasses[colIdx];
+        const numPat = /^[-+]?\d+(\.\d+)?%?$/;
+
+        rows.sort((a, b) => {
+          const aCell = a.querySelector('summary .' + cellClass);
+          const bCell = b.querySelector('summary .' + cellClass);
+          let aText = (aCell?.textContent || '').trim().replace(/\s+/g, ' ').toLowerCase();
+          let bText = (bCell?.textContent || '').trim().replace(/\s+/g, ' ').toLowerCase();
+          if (numPat.test(aText) && numPat.test(bText)) {
+            return (parseFloat(aText) - parseFloat(bText)) * dir;
+          }
+          return aText.localeCompare(bText) * dir;
+        });
+
+        let ref = gridHeader;
+        rows.forEach(row => { ref.after(row); ref = row; });
+        applyCollapse();
+        updateExpandButtons();
+      });
+    });
+
+    // Detail grid column resizing
+    const headerDivs = Array.from(gridHeader.querySelectorAll(':scope > div'));
+    let gridColWidths = null;
+
+    function applyGridWidths() {
+      const tpl = gridColWidths.map(w => w + 'px').join(' ');
+      gridHeader.style.gridTemplateColumns = tpl;
+      document.querySelectorAll('details.detail-row > summary').forEach(s => {
+        s.style.gridTemplateColumns = tpl;
+      });
+    }
+
+    function freezeGridLayout() {
+      if (gridColWidths) return;
+      gridColWidths = headerDivs.map(d => d.offsetWidth);
+      applyGridWidths();
+    }
+
+    headerDivs.forEach((div, idx) => {
+      const resizer = document.createElement('div');
+      resizer.className = 'col-resizer';
+      div.appendChild(resizer);
+      resizer.addEventListener('click', e => e.stopPropagation());
+
+      let startX;
+      resizer.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        freezeGridLayout();
+        startX = e.pageX;
+        const startWidth = gridColWidths[idx];
+        resizer.classList.add('resizing');
+
+        function onMouseMove(e) {
+          gridColWidths[idx] = Math.max(40, startWidth + e.pageX - startX);
+          applyGridWidths();
+        }
+        function onMouseUp() {
+          resizer.classList.remove('resizing');
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        }
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    });
+  }
+
   // Jump to failures table with filters pre-applied
   window.jumpToFailures = function(version, jobtype) {
     // Reset all filters first
@@ -323,7 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
     applyFilters();
 
     // Scroll to the failures heading
-    const heading = document.querySelector('#tab-payload-health h2:nth-of-type(2)');
+    const heading = document.getElementById('section-edge-failures');
     if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -354,10 +451,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
 
+      var jobNameEl = card.querySelector('.da-job-name');
+      var jobName = jobNameEl ? jobNameEl.textContent.trim() : '';
       var summaryText = summary.textContent.trim();
-      var match = summaryText.match(/(?:AI Analyzed)?\s*(.+?)\s*\((\d+\.\d+)\)\s*$/);
-      var jobName = match ? match[1].trim() : '';
-      var version = match ? match[2] : '';
+      var match = summaryText.match(/\((\d+\.\d+)\)/);
+      var version = match ? match[1] : '';
 
       var fields = card.querySelectorAll('.da-field');
       var rootCause = '', failureType = '', recommendation = '';
@@ -409,6 +507,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var header = document.createElement('div');
       header.className = 'ai-highlight-header';
 
+      if (item.jobName) {
+        var name = document.createElement('span');
+        name.className = 'job-name';
+        name.textContent = item.jobName;
+        header.appendChild(name);
+      }
       if (item.topology) {
         var b1 = document.createElement('span');
         b1.className = 'badge ' + item.topology.toLowerCase();
@@ -433,19 +537,13 @@ document.addEventListener('DOMContentLoaded', function() {
         ver.textContent = item.version;
         header.appendChild(ver);
       }
-      if (item.jobName) {
-        var name = document.createElement('span');
-        name.className = 'job-name';
-        name.textContent = item.jobName;
-        header.appendChild(name);
-      }
       card.appendChild(header);
 
       if (item.rootCause) {
         var cause = document.createElement('div');
         cause.className = 'ai-highlight-cause';
         var lbl1 = document.createElement('span');
-        lbl1.className = 'da-label';
+        lbl1.className = 'da-label da-label-highlight';
         lbl1.textContent = 'Root Cause:';
         cause.appendChild(lbl1);
         cause.appendChild(document.createTextNode(' ' + item.rootCause));
@@ -455,7 +553,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var rec = document.createElement('div');
         rec.className = 'ai-highlight-rec';
         var lbl2 = document.createElement('span');
-        lbl2.className = 'da-label';
+        lbl2.className = 'da-label da-label-highlight';
         lbl2.textContent = 'Action:';
         rec.appendChild(lbl2);
         rec.appendChild(document.createTextNode(' ' + item.recommendation));

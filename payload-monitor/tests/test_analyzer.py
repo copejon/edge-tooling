@@ -241,7 +241,14 @@ class TestFindEscalationRisks:
         assert risks[0].consecutive_failures == 3
         assert risks[0].topology == "SNO"
         assert risks[0].version == "4.19"
-        assert "j1" in risks[0].sippy_url
+        assert risks[0].prow_url == "https://prow/j1"
+        assert "sippy.dptools.openshift.org" in risks[0].triage_url
+        assert "4.19" in risks[0].triage_url
+        assert len(risks[0].failing_runs) == 3
+        assert risks[0].failing_runs[0]["payload_tag"] == "t5"
+        assert risks[0].failing_runs[1]["payload_tag"] == "t4"
+        assert risks[0].failing_runs[2]["payload_tag"] == "t3"
+        assert risks[0].failing_runs[0]["prow_url"] == "https://prow/j1"
 
     def test_non_consecutive(self):
         """Informing job fails in payloads 1, 3, 5 (gaps) -> no EscalationRisk."""
@@ -287,6 +294,24 @@ class TestFindEscalationRisks:
     def test_empty_streams(self):
         """No streams -> empty list."""
         assert _find_escalation_risks([], Config()) == []
+
+    def test_latest_failure_empty_url_not_replaced_by_older(self):
+        """Newest failure has an empty prow_url -> it must not be replaced by
+        an older job's URL."""
+        def informing_job(url):
+            return JobRun(name="j1", prow_url=url, result=JobResult.FAILURE,
+                          job_type=JobType.INFORMING, topology="SNO")
+
+        payloads = [
+            _make_payload("t1", [informing_job("https://prow/old")]),
+            _make_payload("t2", [informing_job("https://prow/mid")]),
+            _make_payload("t3", [informing_job("")]),
+        ]
+        stream = StreamReport("s", "4.19", payloads=payloads)
+
+        risks = _find_escalation_risks([stream], Config())
+        assert len(risks) == 1
+        assert risks[0].prow_url == ""
 
     def test_all_passing(self):
         """All jobs pass -> empty list."""
