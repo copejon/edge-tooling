@@ -2,11 +2,11 @@
   "hooks": {
     "SubagentStop": [
       {
-        "matcher": "microshift-ci:prow-job-analyzer",
+        "matcher": "lvms-ci:prow-job-analyzer",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PLUGIN_ROOT/scripts/validate-rca-output.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/validate-rca-output.py\"",
             "timeout": 30,
             "statusMessage": "Validating RCA output schema..."
           }
