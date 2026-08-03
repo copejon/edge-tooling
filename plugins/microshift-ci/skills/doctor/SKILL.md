@@ -78,12 +78,12 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
    bash plugins/microshift-ci/scripts/doctor.sh graphs --component microshift --workdir <WORKDIR>
    ```
 
-2. The script finds PCP archives in downloaded artifacts and generates PNG graphs at `<WORKDIR>/graphs/<build_id>/`:
-   - `1_cpu_usage.png` — CPU usage (user, system, I/O wait)
-   - `2_mem_usage.png` — Memory usage (used, cached)
-   - `3_disk_io.png` — Disk I/O (read/write OPS, await)
-   - `4_disk_usage.png` — Disk usage by partition (% fill)
-3. If prerequisites are missing (`pcp2json`, `matplotlib`), the script errors and stops.
+2. The script finds PCP archives in downloaded artifacts and generates JSON metric files at `<WORKDIR>/graphs/<build_id>/`:
+   - `cpu.json` — CPU usage (user, system, I/O wait, idle)
+   - `mem.json` — Memory usage (used, cached, free, total)
+   - `io.json` — Disk I/O (read/write ops, await, queue depth)
+   - `disk.json` — Disk usage by partition (% fill, GB used)
+3. If prerequisites are missing (`pcp2json`), the script errors and stops.
 
 ### Step 2: Analyze Each Job Using microshift-ci:prow-job-analyzer Agent
 
@@ -217,8 +217,7 @@ HTML report generated: <WORKDIR>/report-microshift-ci-doctor.html
 - MCP Jira server must be configured (for bug correlation)
 - Internet access to fetch job data from Prow/GCS
 - Bash shell, Python 3
-- `pcp-export-pcp2json` — for PCP graph generation
-- `matplotlib` Python package — for PCP graph plotting
+- `pcp-export-pcp2json` — for PCP metric extraction
 
 ## Related Skills
 

@@ -17,7 +17,7 @@ Your prompt contains:
 - `artifacts_dir` (required): local path to downloaded prow job artifacts (contains `build-log.txt` and `finished.json`)
 - `job_url` (required): the full prow job URL — use directly when provided instead of reconstructing
 - `job_name` (required): the full prow job name — use directly when provided instead of extracting
-- `graphs_dir` (optional): path to pre-generated PCP performance graph PNGs
+- `graphs_dir` (optional): path to pre-generated PCP performance metric JSON files
 - `source_dir` (optional): path to MicroShift source checkout
 
 ## Output
@@ -36,7 +36,7 @@ Two `Created container` events for the same pod means the first instance died. R
 
 Journal files (`journal_*.log` next to the sosreport tarballs) are readable directly — check them first for service failures, OOM kills, panics, and container exits. Extract a sosreport with `bash plugins/shared/scripts/extract-sosreport.sh <tarball>` when the investigation requires pod/container logs, including crashes, restarts, readiness flaps, or repeated container creation — pod and container logs (especially `previous.log`) exist exclusively inside the tarball. Prefer the on-failure sosreport over end-of-scenario because test-created namespaces are cleaned up by then. Match sosreport to failure by timestamp.
 
-When `graphs_dir` is provided and the failure involves timeouts, slowness, or resource pressure, read the PNGs for CPU/memory/disk correlation with the failure window.
+When `graphs_dir` is provided and the failure involves timeouts, slowness, or resource pressure, read the JSON metric files (`cpu.json`, `mem.json`, `io.json`, `disk.json`) for CPU/memory/disk/IO correlation with the failure window. Look for sustained patterns (4+ consecutive samples), not isolated spikes.
 
 When the source checkout is available at `source_dir`, read the failing test's source (Robot Framework suites under `test/suites/`, scenario definitions under `test/scenarios*/`) to distinguish test bugs from product bugs. If absent, note it in `analysis_gaps`.
 
@@ -75,8 +75,8 @@ Each entry in the output array has exactly these fields:
      "evidence": "/tmp/microshift-ci-claude-workdir.260601/artifacts/123456/artifacts/e2e-aws-tests-arm-nightly/openshift-microshift-e2e-metal-tests/artifacts/scenario-info/el96-lrel@standard1/rf-debug.log:2241",
      "quote": "cert-manager webhook not ready after 600s"},
     {"cause": "image pulls saturated disk I/O during the startup window, delaying all service startups including cert-manager — write await exceeded 800ms for 6 consecutive minutes",
-     "evidence": "/tmp/microshift-ci-claude-workdir.260601/graphs/123456/3_disk_io.png:1",
-     "quote": ""}
+     "evidence": "/tmp/microshift-ci-claude-workdir.260601/graphs/123456/io.json:42",
+     "quote": "\"await\": [823.5,"}
   ],
   "confidence": "medium",
   "analysis_gaps": [],
@@ -97,7 +97,7 @@ Each entry in the output array has exactly these fields:
 - `release`: extract from job_name (e.g. `4.22` from `release-4.22`), default `main`
 - `remediation`: suggested fix (~120 chars). Do not propose making the test more tolerant unless the causal chain shows the product behaved correctly
 - `finished`: job finish date (`YYYY-MM-DD`) from `finished.json` timestamp
-- `causal_chain`: array of `{"cause", "evidence", "quote"}` — each link toward root cause. `evidence` is an absolute path with line number (`/path/file:line`; `:1` for images). `quote` is a short verbatim excerpt (empty for images). Re-read every cited `file:line` before finalizing. Aim for 2-4 links.
+- `causal_chain`: array of `{"cause", "evidence", "quote"}` — each link toward root cause. `evidence` is an absolute path with line number (`/path/file:line`; `:1` for binary files). `quote` is a short verbatim excerpt (empty for binary files). Re-read every cited `file:line` before finalizing. Aim for 2-4 links.
 - `confidence`: `high` (every link directly evidenced), `medium` (inferred but consistent), `low` (symptom-level, evidence exhausted — populate `analysis_gaps`)
 - `analysis_gaps`: array of strings naming missing evidence. Empty when nothing was skipped.
 - `scenarios`: scenario names from `scenario-info/` directories or junit `testsuite name`. Empty array for non-scenario failures.
@@ -136,7 +136,7 @@ One line, ~80 chars. Focus on the mechanism. Use stable terms — the same under
 
 Downstream automation uses confidence to decide whether to act — do not inflate it.
 
-- `high`: every causal-chain link is directly evidenced by a quoted artifact line or graph
+- `high`: every causal-chain link is directly evidenced by a quoted artifact line or metric data point
 - `medium`: the mechanism is inferred but consistent with all available evidence
 - `low`: symptom-level only — populate `analysis_gaps`
 
