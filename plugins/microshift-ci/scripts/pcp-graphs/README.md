@@ -1,8 +1,9 @@
-# PCP Performance Graphs for MicroShift CI
+# PCP Performance Metrics for MicroShift CI
 
-Generate performance graphs from PCP (Performance Co-Pilot) archives
+Extract performance metrics from PCP (Performance Co-Pilot) archives
 collected during MicroShift CI job runs. Produces CPU, memory, disk I/O,
-and disk usage charts that are embedded in the ci-doctor HTML report.
+and disk usage JSON files that are embedded as interactive Chart.js charts
+in the ci-doctor HTML report.
 
 ## Background
 
@@ -47,13 +48,12 @@ The directory contains files like `yyyymmdd.hh.mm.{0,index,meta}` and a
 ## Prerequisites
 
 - `pcp-export-pcp2json` package (provides the `pcp2json` command)
-- Python 3 with `matplotlib`
+- Python 3
 
 Install:
 
 ```bash
 sudo dnf install -y pcp-export-pcp2json
-pip install matplotlib
 ```
 
 ## Usage
@@ -64,42 +64,40 @@ Graphs are generated automatically by `doctor.sh graphs`:
 bash doctor.sh graphs --workdir /tmp/microshift-ci-claude-workdir.YYMMDD
 ```
 
-This finds all PCP archives in downloaded artifacts and produces PNG
-graphs at `${WORKDIR}/graphs/<build_id>/`. The `finalize` step then
-embeds them as base64 in the HTML report with a tabbed UI per job.
+This finds all PCP archives in downloaded artifacts and produces JSON
+metric files at `${WORKDIR}/graphs/<build_id>/`. The `finalize` step
+embeds the JSON data in the HTML report as interactive Chart.js charts.
 
 ## Output
 
 | File | Description |
 |---|---|
-| `1_cpu_usage.png` | CPU usage stacked area: User (blue), I/O Wait (orange), System (red) |
-| `2_mem_usage.png` | Memory usage stacked area: Used (red), Cached (orange), Total (dashed) |
-| `3_disk_io.png` | Disk I/O chart: Read OPS (blue), Write OPS (red), Await (green dashed) |
-| `4_disk_usage.png` | Disk usage by partition: fill % per mount point |
-
-Numeric prefixes control tab display order in the HTML report.
+| `cpu.json` | CPU usage: user%, sys%, iowait%, idle% at 15s intervals |
+| `mem.json` | Memory usage: used_gb, cached_gb, free_gb, total_gb at 15s intervals |
+| `io.json` | Disk I/O: read/write ops/s, iops, await (ms), queue depth at 15s intervals |
+| `disk.json` | Disk usage per partition: used_pct%, used_gb at 15s intervals |
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `generate-graphs.sh` | Orchestrator: finds PCP archives, runs extraction and plotting in parallel |
+| `generate-graphs.sh` | Orchestrator: finds PCP archives, runs extraction in parallel |
 | `extract_cpu.sh` | Runs `pcp2json` for CPU metrics, pipes through `parse_cpu.py` |
 | `parse_cpu.py` | Parses pcp2json CPU output (user, sys, iowait, idle), normalizes to percentages |
-| `plot_cpu.py` | Generates CPU usage PNG with stacked area chart and peak table |
 | `extract_mem.sh` | Runs `pcp2json` for memory metrics, pipes through `parse_mem.py` |
 | `parse_mem.py` | Parses pcp2json memory output (used, free, cached, physmem), converts to GB |
-| `plot_mem.py` | Generates memory usage PNG with stacked area chart |
 | `extract_io.sh` | Runs `pcp2json` for disk metrics, pipes through `parse_pcp.py` |
 | `parse_pcp.py` | Parses pcp2json disk output, aggregates per-device (sum read/write, max await) |
-| `plot_io.py` | Generates disk I/O PNG with dual Y-axes (OPS + await) |
 | `extract_disk_usage.sh` | Runs `pcp2json` for filesystem metrics, pipes through `parse_disk_usage.py` |
 | `parse_disk_usage.py` | Parses pcp2json filesys output, tracks all partitions as usage percentages |
-| `plot_disk_usage.py` | Generates per-partition disk usage PNG with mount points in legend |
+| `pcp-charts.js` | Shared Chart.js rendering functions for CPU/mem/io/disk charts |
+| `create-pcp-dashboard.py` | Standalone interactive HTML dashboard from PCP metrics |
+| `generate-dashboard.sh` | Per-scenario dashboard generator (handles per-VM PCP tarballs) |
+| `plot_*.py` | Legacy matplotlib plotters (no longer called by the pipeline) |
 
-## Adding a New Graph Type
+## Adding a New Metric Type
 
 1. Create `extract_<type>.sh` and `parse_<type>.py` (follow existing patterns)
-2. Create `plot_<type>.py`
-3. Add a block to `generate-graphs.sh` with the next numeric prefix (e.g. `5_`)
-4. No changes needed in `create-report.py` — it auto-discovers all `*.png` files
+2. Add a block to `generate-graphs.sh` to extract the new metric
+3. Add a rendering function to `pcp-charts.js`
+4. Update `create-report.py` to load the new JSON file in `_METRIC_FILES`
