@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""SubagentStop hook validator for prow-job-analyzer agent output.
+"""Hook validator for prow-job-analyzer agent output.
 
-Reads the hook payload from stdin, extracts last_assistant_message,
-and validates it against the expected JSON schema. Returns a block
-decision with specific corrections when validation fails.
+Supports two hook types:
+  - SubagentStop: payload contains last_assistant_message directly.
+  - Stop: payload may contain transcript_path; the last assistant
+    message is extracted from the JSONL transcript. Gated by
+    CI_DOCTOR_RCA_SESSION env var (no-op when unset).
+
+Validates the message against the expected JSON schema and returns a
+block decision with specific corrections when validation fails.
 """
 
 import json
@@ -194,6 +199,43 @@ def validate_message(message):
     return validate_json_text(message.strip())
 
 
+def _extract_last_assistant_message_from_transcript(transcript_path):
+    """Read a JSONL transcript and return the last assistant text message."""
+    last_text = None
+    try:
+        with open(transcript_path, errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if record.get("type") != "assistant":
+                    continue
+                # Extract text from message.content blocks
+                message = record.get("message", {})
+                if not isinstance(message, dict):
+                    continue
+                content = message.get("content", [])
+                if not isinstance(content, list):
+                    continue
+                texts = []
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text", "")
+                        if text:
+                            texts.append(text)
+                if texts:
+                    last_text = "\n".join(texts)
+    except OSError as e:
+        print(f"WARNING: validate-rca-output: could not read transcript: {e}", file=sys.stderr)
+    return last_text
+
+
 def main():
     try:
         payload = json.load(sys.stdin)
@@ -205,7 +247,24 @@ def main():
         print("WARNING: validate-rca-output: expected dict payload, skipping validation", file=sys.stderr)
         sys.exit(0)
 
-    message = payload.get("last_assistant_message", "")
+    # Detect hook type by payload shape
+    if "last_assistant_message" in payload:
+        # SubagentStop hook path
+        message = payload.get("last_assistant_message", "")
+    else:
+        # Stop hook path — only relevant for RCA sessions
+        if not os.environ.get("CI_DOCTOR_RCA_SESSION"):
+            sys.exit(0)
+
+        message = None
+        transcript_path = payload.get("transcript_path")
+        if transcript_path and os.path.isfile(transcript_path):
+            message = _extract_last_assistant_message_from_transcript(transcript_path)
+
+        if not message:
+            print("WARNING: validate-rca-output: Stop hook could not locate assistant message, skipping", file=sys.stderr)
+            sys.exit(0)
+
     errors = validate_message(message)
 
     if errors:

@@ -24,6 +24,19 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/validate-rca-output.py\"",
+            "timeout": 30,
+            "statusMessage": "Validating RCA output schema..."
+          }
+        ]
+      }
     ]
   }
 }
