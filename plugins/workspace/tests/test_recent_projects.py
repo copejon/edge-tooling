@@ -123,6 +123,36 @@ class TestFallbackToMtime(unittest.TestCase):
         self.assertLess(text.index("second"), text.index("first"))
 
 
+class TestMalformedLastActiveFallback(unittest.TestCase):
+    """A malformed last-active value falls back to mtime, not dropped."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.ws = Path(self.tmp) / "workspace"
+        self.ws.mkdir()
+        (self.ws / "dev-env.yaml").write_text("domain: test\nrepos: []\n")
+        self.projects = self.ws / "projects"
+        self.projects.mkdir()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp)
+
+    def test_malformed_date_falls_back_to_mtime(self):
+        """Project with invalid last-active still appears, ordered by mtime."""
+        write_project(self.projects, "bad-date", last_active="not-a-date")
+        old_time = 1700000000
+        os.utime(self.projects / "bad-date" / "CLAUDE.md", (old_time, old_time))
+
+        write_project(self.projects, "no-date")
+
+        result = run_hook(self.ws)
+        self.assertIsNotNone(result)
+        text = result["systemMessage"]
+        self.assertIn("bad-date", text)
+        self.assertLess(text.index("no-date"), text.index("bad-date"))
+
+
 class TestDoneProjectsFiltered(unittest.TestCase):
     """Done/closed projects never appear regardless of last-active."""
 
