@@ -91,13 +91,11 @@ def collect_projects(projects_dir: Path) -> list[dict]:
         if la_ts is not None:
             sort_ts = la_ts
             date_str = datetime.fromtimestamp(la_ts).strftime("%b %d")
-            sort_source = "frontmatter"
         else:
             sort_ts = newest_mtime(d)
             if sort_ts is None:
                 continue
             date_str = datetime.fromtimestamp(sort_ts).strftime("%b %d %H:%M")
-            sort_source = "mtime"
 
         entries.append({
             "name": d.name,
@@ -105,7 +103,6 @@ def collect_projects(projects_dir: Path) -> list[dict]:
             "status": fm.get("status", "—"),
             "mtime": sort_ts,
             "date_str": date_str,
-            "sort_source": sort_source,
         })
 
     entries.sort(key=lambda e: e["mtime"], reverse=True)
