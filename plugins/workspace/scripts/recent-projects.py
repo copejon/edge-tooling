@@ -62,8 +62,20 @@ def newest_mtime(directory: Path) -> float | None:
 TERMINAL_STATUSES = {"done", "complete", "closed"}
 
 
+def _parse_last_active(value: str) -> float | None:
+    """Parse a YYYY-MM-DD date string into a timestamp, or None."""
+    try:
+        parts = value.split("-")
+        if len(parts) != 3:
+            return None
+        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+        return datetime(y, m, d, 23, 59, 59).timestamp()
+    except (ValueError, OverflowError):
+        return None
+
+
 def collect_projects(projects_dir: Path) -> list[dict]:
-    """Collect non-done projects with their metadata and mtime."""
+    """Collect non-done projects with their metadata, sorted by last-active date or mtime."""
     entries = []
     for d in sorted(projects_dir.iterdir()):
         if not d.is_dir() or d.name.startswith("."):
@@ -73,16 +85,27 @@ def collect_projects(projects_dir: Path) -> list[dict]:
         if fm.get("status", "").lower() in TERMINAL_STATUSES:
             continue
 
-        mtime = newest_mtime(d)
-        if mtime is None:
-            continue
+        last_active_str = fm.get("last-active", "")
+        la_ts = _parse_last_active(last_active_str) if last_active_str else None
+
+        if la_ts is not None:
+            sort_ts = la_ts
+            date_str = datetime.fromtimestamp(la_ts).strftime("%b %d")
+            sort_source = "frontmatter"
+        else:
+            sort_ts = newest_mtime(d)
+            if sort_ts is None:
+                continue
+            date_str = datetime.fromtimestamp(sort_ts).strftime("%b %d %H:%M")
+            sort_source = "mtime"
 
         entries.append({
             "name": d.name,
             "type": fm.get("type", "—"),
             "status": fm.get("status", "—"),
-            "mtime": mtime,
-            "date_str": datetime.fromtimestamp(mtime).strftime("%b %d %H:%M"),
+            "mtime": sort_ts,
+            "date_str": date_str,
+            "sort_source": sort_source,
         })
 
     entries.sort(key=lambda e: e["mtime"], reverse=True)
@@ -110,7 +133,7 @@ def main():
     if not entries:
         sys.exit(0)
 
-    top = entries[:3]
+    top = entries[:5]
 
     lines = ["Recent projects:", ""]
     lines.append("  #   NAME                           TYPE           STATUS     LAST ACTIVE")
