@@ -179,10 +179,12 @@ Using the Edit tool, update the YAML frontmatter:
    `status: done`
 2. Add a `closed: <YYYY-MM-DD>` field (today's date) after the
    `status` line. If a `closed:` field already exists, update it.
-3. If worktrees were removed in Step 2.5, change the `worktrees:`
+3. Update `last-active: <YYYY-MM-DD>` to today's date (or add it after
+   `closed:` if it doesn't exist).
+4. If worktrees were removed in Step 2.5, change the `worktrees:`
    list to `worktrees: []`. Leave `branch:` as-is for historical
    reference.
-4. If the project had a `skills:` list, change it to `skills: []`
+5. If the project had a `skills:` list, change it to `skills: []`
    (the symlinks were handled in Step 2.5e; the cleared list records
    that this project no longer holds any skill references).
 
