@@ -44,6 +44,9 @@ Review the conversation history and identify:
 4. **New detail files in Reference Files table** — files created in
    `projects/<name>/` not yet registered in CLAUDE.md's table.
 5. **Progress entries** — milestones or outcomes to append.
+6. **`last-active` timestamp** — always update `last-active: <YYYY-MM-DD>`
+   in the frontmatter to today's date when any other update is applied.
+   If the field does not exist yet, add it after the `status:` line.
 
 If nothing to update, say so and stop.
 
@@ -51,6 +54,10 @@ If nothing to update, say so and stop.
 
 Use the Edit tool for existing files. Use the Write tool for new detail
 files. Edit each file individually — do not rewrite entire files.
+
+Always set `last-active: <YYYY-MM-DD>` (today) in the frontmatter as
+the first edit to CLAUDE.md, before applying checklist or progress
+changes. This field drives the SessionStart ordering hook.
 
 Summarize what was updated. If the session produced durable domain-level
 knowledge (not just project status), suggest `/workspace:update-domain` —
