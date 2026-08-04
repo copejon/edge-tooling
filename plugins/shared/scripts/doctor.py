@@ -273,6 +273,29 @@ class DoctorPipeline:
             pass
         return {"cost_usd": 0, "duration_ms": 0}
 
+    def _write_job_diagnostics(self, results):
+        """Write per-job cost and stop hook stats to diagnostics.txt."""
+        lines = ["Job Diagnostics:"]
+        for label in sorted(results):
+            r = results[label]
+            stats = r.get("stats", {})
+            cost = stats.get("cost_usd", 0)
+            hooks = stats.get("stop_hook_count", 0)
+            status = "OK" if r["success"] else "FAILED"
+            timed_out = any("Timed out" in e for e in r.get("validation_errors", []))
+
+            parts = [f"  {label}: {status}, ${cost:.2f}"]
+            if timed_out:
+                parts.append("TIMED OUT")
+            elif hooks == 0:
+                parts.append("NO STOP HOOK (validation did not run!)")
+            elif hooks > 1:
+                parts.append(f"stop hook fired {hooks}x")
+            lines.append(", ".join(parts))
+
+        with open(self.diagnostics_file, "a") as f:
+            f.write("\n".join(lines) + "\n")
+
     # ------------------------------------------------------------------
     # Stages
     # ------------------------------------------------------------------
@@ -368,11 +391,12 @@ class DoctorPipeline:
                 job_info = futures[future]
                 label = job_info["label"]
                 try:
-                    success, output_path, validation_errors = future.result()
+                    success, output_path, validation_errors, stats = future.result()
                     results[label] = {
                         "success": success,
                         "output_path": output_path,
                         "validation_errors": validation_errors,
+                        "stats": stats,
                     }
                     if success:
                         log.info("[OK] %s", label)
@@ -387,11 +411,13 @@ class DoctorPipeline:
                     self.message(f"ERROR: {label} raised exception: {exc}")
                     results[label] = {
                         "success": False, "output_path": None, "validation_errors": [],
+                        "stats": {"cost_usd": 0, "stop_hook_count": 0},
                     }
 
         succeeded = sum(1 for r in results.values() if r["success"])
         log.info("Analyze complete: %d/%d succeeded", succeeded, len(results))
-        return True
+        self._write_job_diagnostics(results)
+        return succeeded > 0 or not results
 
     def _collect_jobs_to_analyze(self):
         """Build a list of job dicts to analyze from prepare-summary.json."""
@@ -691,6 +717,37 @@ def _extract_result_text_standalone(log_path):
     return last_text
 
 
+def _extract_job_stats(log_path):
+    """Extract cost and stop hook count from a stream-json log."""
+    cost_usd = 0
+    stop_hook_count = 0
+    try:
+        with open(log_path, errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if record.get("type") == "result":
+                    cost_usd = record.get("total_cost_usd", 0)
+                elif (record.get("isSynthetic") and record.get("type") == "user"):
+                    msg = record.get("message", {})
+                    if isinstance(msg, dict):
+                        content = msg.get("content", [])
+                        if isinstance(content, list):
+                            for block in content:
+                                if isinstance(block, dict) and "Stop hook feedback:" in block.get("text", ""):
+                                    stop_hook_count += 1
+    except OSError:
+        pass
+    return {"cost_usd": cost_usd, "stop_hook_count": stop_hook_count}
+
+
 def _run_claude_session(prompt, system_prompt, plugin_dir, model, log_path,
                         max_turns=30, timeout=600, env=None):
     """Run a claude -p session, writing stream-json to log_path.
@@ -776,7 +833,8 @@ def _analyze_single_job(job_info, plugin_dir, model, agent_system_prompt,
     else:
         validation_errors.append("No assistant text found in stream-json log")
 
-    return saved, str(output_path) if saved else None, validation_errors
+    stats = _extract_job_stats(log_path)
+    return saved, str(output_path) if saved else None, validation_errors, stats
 
 
 def main():
