@@ -76,6 +76,9 @@ CSS = """\
         .release-section { background: white; border-radius: 8px; padding: 15px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .release-header { display: flex; justify-content: space-between; align-items: center; }
         .release-header h2 { color: #16213e; margin: 0; }
+        .diagnostics-banner { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px 16px; margin: 10px 0 15px 0; }
+        .diagnostics-banner summary { font-weight: 600; color: #856404; cursor: pointer; font-size: 0.95em; }
+        .diagnostics-banner pre { margin: 8px 0 0 0; white-space: pre-wrap; font-size: 0.85em; color: #533f03; }
         .badge { padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
         .badge-ok { background: #d4edda; color: #155724; }
         .badge-issues { background: #fff3cd; color: #856404; }
@@ -1730,7 +1733,19 @@ def _build_job_issue_map(releases_data):
 
 
 
-def generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error=None, bugs_tab_data=None, images_tab_data=None, index_data=None, jira_cfg=None, status_data=None):
+def _render_diagnostics_banner(text):
+    if not text or not text.strip():
+        return ""
+    lines = _e(text.strip())
+    return (
+        '    <details class="diagnostics-banner">\n'
+        '        <summary>Pipeline Diagnostics</summary>\n'
+        f'        <pre>{lines}</pre>\n'
+        '    </details>'
+    )
+
+
+def generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error=None, bugs_tab_data=None, images_tab_data=None, index_data=None, jira_cfg=None, status_data=None, diagnostics_text=None):
     date_str = timestamp.strftime("%Y-%m-%d")
     time_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1835,7 +1850,7 @@ def generate_html(component_title, releases_data, all_bug_candidates, pr_data, p
 <div class="container" style="display:none">
     <h1>{component_title} CI Doctor Report</h1>
     <p class="timestamp">Generated: {time_str} UTC</p>
-
+{_render_diagnostics_banner(diagnostics_text)}
     <div class="overview-grid">
 {chr(10).join(cards)}
     </div>
@@ -2085,9 +2100,16 @@ def main():
             print("WARNING: Chart.js or pcp-charts.js not found, "
                   "interactive PCP charts will not render", file=sys.stderr)
 
+    # Read diagnostics
+    diagnostics_path = os.path.join(workdir, "diagnostics.txt")
+    diagnostics_text = None
+    if os.path.isfile(diagnostics_path):
+        with open(diagnostics_path) as f:
+            diagnostics_text = f.read()
+
     # Generate HTML
     timestamp = datetime.now(timezone.utc)
-    html_content = generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error, bugs_tab_data, images_tab_data, index_data, COMPONENT_JIRA_CREATE.get(component), status_data=status_data)
+    html_content = generate_html(component_title, releases_data, all_bug_candidates, pr_data, pr_status, timestamp, pr_error, bugs_tab_data, images_tab_data, index_data, COMPONENT_JIRA_CREATE.get(component), status_data=status_data, diagnostics_text=diagnostics_text)
 
     output_path = os.path.join(workdir, f"report-{component}-ci-doctor.html")
     with open(output_path, "w") as f:
