@@ -669,52 +669,22 @@ class DoctorPipeline:
 # Module-level function for ProcessPoolExecutor (must be picklable)
 # ----------------------------------------------------------------------
 
-def _run_validation(text):
-    """Run validate-rca-output.py's validate_message on the given text.
-
-    Uses importlib because the filename contains dashes.
-    """
+def _load_validate_module():
+    """Import validate-rca-output.py via importlib (filename contains dashes)."""
     import importlib.util
     script = Path(__file__).resolve().parent / "validate-rca-output.py"
     spec = importlib.util.spec_from_file_location("validate_rca_output", script)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.validate_message(text)
+    return mod
+
+
+def _run_validation(text):
+    return _load_validate_module().validate_message(text)
 
 
 def _extract_result_text_standalone(log_path):
-    """Extract the final assistant text from a stream-json log."""
-    last_text = None
-    try:
-        with open(log_path, errors="replace") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(record, dict):
-                    continue
-                if record.get("type") == "assistant" and "message" in record:
-                    message = record["message"]
-                    if not isinstance(message, dict):
-                        continue
-                    content = message.get("content", [])
-                    if not isinstance(content, list):
-                        continue
-                    texts = []
-                    for block in content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            t = block.get("text", "")
-                            if t:
-                                texts.append(t)
-                    if texts:
-                        last_text = "\n".join(texts)
-    except OSError:
-        pass
-    return last_text
+    return _load_validate_module()._extract_last_assistant_message_from_transcript(log_path)
 
 
 def _extract_job_stats(log_path):
