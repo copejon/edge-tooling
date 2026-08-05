@@ -17,7 +17,7 @@ import sys
 import threading
 import time
 import textwrap
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 log = logging.getLogger("doctor")
@@ -373,7 +373,7 @@ class DoctorPipeline:
         log.info("Analyzing %d jobs (max %d parallel)...", len(jobs), self.max_parallel)
 
         results = {}
-        with ProcessPoolExecutor(max_workers=self.max_parallel) as pool:
+        with ThreadPoolExecutor(max_workers=self.max_parallel) as pool:
             futures = {}
             for job_info in jobs:
                 future = pool.submit(
