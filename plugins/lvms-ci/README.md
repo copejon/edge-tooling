@@ -4,10 +4,10 @@ Claude Code plugin for LVMS (Logical Volume Manager Storage) CI triage and autom
 
 ## CI Doctor Pipeline
 
-The full CI doctor pipeline is driven by `doctor.py`:
+The full CI doctor pipeline is driven by `run-doctor.py`:
 
 ```bash
-python3 plugins/lvms-ci/scripts/doctor.py \
+python3 plugins/lvms-ci/scripts/run-doctor.py \
     --releases main --workdir /tmp/workdir
 ```
 

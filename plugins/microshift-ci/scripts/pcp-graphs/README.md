@@ -58,10 +58,10 @@ sudo dnf install -y pcp-export-pcp2json
 
 ## Usage
 
-Graphs are generated automatically by `doctor.sh graphs`:
+Graphs are generated automatically by `doctor-helper.sh graphs`:
 
 ```bash
-bash doctor.sh graphs --workdir /tmp/microshift-ci-claude-workdir.YYMMDD
+bash doctor-helper.sh graphs --workdir /tmp/microshift-ci-claude-workdir.YYMMDD
 ```
 
 This finds all PCP archives in downloaded artifacts and produces JSON

@@ -11,21 +11,21 @@ Analyze MicroShift CI failures, produce HTML reports, and create JIRA bugs.
 
 ## CI Doctor Pipeline
 
-The full CI doctor pipeline is driven by `doctor.py` — a deterministic Python
+The full CI doctor pipeline is driven by `run-doctor.py` — a deterministic Python
 script that orchestrates all stages (prepare, graphs, analyze, bugs, finalize).
 LLM agents are used only for per-job root cause analysis and Jira bug correlation.
 
 ```bash
-python3 plugins/microshift-ci/scripts/doctor.py \
+python3 plugins/microshift-ci/scripts/run-doctor.py \
     --releases 4.19,4.20,4.21,4.22 --workdir /tmp/workdir
 
 # Include pull request analysis
-python3 plugins/microshift-ci/scripts/doctor.py \
+python3 plugins/microshift-ci/scripts/run-doctor.py \
     --releases 4.19,4.20,4.21,4.22 --workdir /tmp/workdir \
     --pull-requests --repo openshift/microshift
 
 # Run specific stages only
-python3 plugins/microshift-ci/scripts/doctor.py \
+python3 plugins/microshift-ci/scripts/run-doctor.py \
     --releases 4.22 --workdir /tmp/workdir --stages analyze,finalize
 ```
 
@@ -46,7 +46,7 @@ python3 plugins/microshift-ci/scripts/doctor.py \
 ### Full pipeline
 
 ```bash
-python3 plugins/microshift-ci/scripts/doctor.py \
+python3 plugins/microshift-ci/scripts/run-doctor.py \
     --releases 4.19,4.20,4.21,4.22 --workdir /tmp/workdir
 ```
 

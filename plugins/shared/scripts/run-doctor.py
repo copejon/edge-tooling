@@ -5,7 +5,7 @@ Replaces LLM-orchestrated agent fan-out with a Python script that runs
 the entire doctor pipeline: prepare -> graphs -> analyze -> bugs -> finalize.
 
 Component is auto-detected from the symlink path (e.g.
-plugins/microshift-ci/scripts/doctor.py -> component "microshift").
+plugins/microshift-ci/scripts/run-doctor.py -> component "microshift").
 """
 
 import argparse
@@ -73,7 +73,7 @@ def detect_component():
     """Auto-detect component from the invocation path of sys.argv[0].
 
     Uses the unresolved path (before symlink resolution) so that
-    plugins/microshift-ci/scripts/doctor.py -> component "microshift".
+    plugins/microshift-ci/scripts/run-doctor.py -> component "microshift".
     """
     invoked = Path(sys.argv[0])
     for part in invoked.parts:
@@ -90,7 +90,7 @@ def detect_plugin_dir():
     """Return the plugin directory from the invocation path.
 
     Uses the unresolved path so symlinks work correctly:
-    plugins/microshift-ci/scripts/doctor.py -> plugins/microshift-ci
+    plugins/microshift-ci/scripts/run-doctor.py -> plugins/microshift-ci
     """
     invoked = Path(sys.argv[0]).absolute()
     for i, part in enumerate(invoked.parts):
@@ -121,9 +121,9 @@ def parse_args():
               lvm-operator:  prepare, analyze, finalize
 
             Examples:
-              python3 plugins/microshift-ci/scripts/doctor.py \\
+              python3 plugins/microshift-ci/scripts/run-doctor.py \\
                   --releases 4.19,4.20,main --workdir /tmp/workdir
-              python3 plugins/lvms-ci/scripts/doctor.py \\
+              python3 plugins/lvms-ci/scripts/run-doctor.py \\
                   --releases main --workdir /tmp/workdir --stages analyze,finalize
         """),
     )
@@ -209,8 +209,8 @@ class DoctorPipeline:
             f.write(msg + "\n")
 
     def run_doctor_sh(self, subcommand, extra_args, log_name):
-        """Run a doctor.sh subcommand, streaming output live and to a log file."""
-        doctor_sh = Path(self.plugin_dir) / "scripts" / "doctor.sh"
+        """Run a doctor-helper.sh subcommand, streaming output live and to a log file."""
+        doctor_sh = Path(self.plugin_dir) / "scripts" / "doctor-helper.sh"
         cmd = [
             "bash", str(doctor_sh), subcommand,
             "--component", self.component,
@@ -221,7 +221,7 @@ class DoctorPipeline:
         timeout = DOCTOR_SH_TIMEOUT.get(subcommand, 600)
         output_lines = []
 
-        log.info("Running: doctor.sh %s", subcommand)
+        log.info("Running: doctor-helper.sh %s", subcommand)
         try:
             with open(log_path, "w") as log_f:
                 proc = subprocess.Popen(
@@ -245,7 +245,7 @@ class DoctorPipeline:
                 try:
                     for line in proc.stdout:
                         log_f.write(line)
-                        log.info("[doctor.sh] %s", line.rstrip())
+                        log.info("[doctor-helper.sh] %s", line.rstrip())
                         output_lines.append(line)
                     proc.wait()
                 finally:
@@ -256,14 +256,14 @@ class DoctorPipeline:
 
             stdout = "".join(output_lines)
             if timed_out:
-                self.message(f"ERROR: doctor.sh {subcommand} timed out after {timeout}s")
+                self.message(f"ERROR: doctor-helper.sh {subcommand} timed out after {timeout}s")
                 return False, stdout
             if proc.returncode != 0:
-                self.message(f"ERROR: doctor.sh {subcommand} exited with code {proc.returncode}")
+                self.message(f"ERROR: doctor-helper.sh {subcommand} exited with code {proc.returncode}")
                 return False, stdout
             return True, stdout
         except OSError as e:
-            self.message(f"ERROR: doctor.sh {subcommand} failed to start: {e}")
+            self.message(f"ERROR: doctor-helper.sh {subcommand} failed to start: {e}")
             return False, ""
 
     def run_claude_session(self, prompt, system_prompt, log_path,
@@ -367,7 +367,7 @@ class DoctorPipeline:
 
         summary_path = self.workdir / "prepare-summary.json"
 
-        # doctor.sh prints a JSON summary as its last output (may be multi-line).
+        # doctor-helper.sh prints a JSON summary as its last output (may be multi-line).
         # Find the last top-level '{' (at start of line) to skip nested braces.
         # Use raw_decode to tolerate trailing text after the JSON object.
         decoder = json.JSONDecoder()

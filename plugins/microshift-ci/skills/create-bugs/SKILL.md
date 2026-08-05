@@ -594,7 +594,7 @@ No job files found for 4.19 in <WORKDIR>
 
 ## Related Skills
 
-- **doctor.py**: Deterministic pipeline script that produces job analysis files consumed by this command
+- **run-doctor.py**: Deterministic pipeline script that produces job analysis files consumed by this command
 - **microshift-ci:prow-job**: Command that produces individual job reports as JSON
 - **jira:create-bug**: Single bug creation skill (not used here — we call MCP directly)
 - **microshift-ci:close-stale-bugs**: Closes stale unlinked bugs (should run after this skill)

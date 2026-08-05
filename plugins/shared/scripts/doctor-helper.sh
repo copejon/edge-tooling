@@ -7,16 +7,16 @@ set -euo pipefail
 #
 # Two phases called by the doctor skill with LLM steps in between:
 #
-#   doctor.sh prepare --component <component> --workdir DIR <releases> [--pull-requests]
+#   doctor-helper.sh prepare --component <component> --workdir DIR <releases> [--pull-requests]
 #     - Collects failed jobs for each release
 #     - Downloads all artifacts in parallel
 #     - Writes per-release and PR jobs JSON files to ${WORKDIR}/jobs/
 #
-#   doctor.sh graphs --component <component> --workdir DIR [--timezone TZ]
+#   doctor-helper.sh graphs --component <component> --workdir DIR [--timezone TZ]
 #     - Generates PCP performance graphs for all jobs with pmlogs
 #     - Outputs PNG files to ${WORKDIR}/graphs/<build_id>/
 #
-#   doctor.sh finalize --component <component> --workdir DIR <releases>
+#   doctor-helper.sh finalize --component <component> --workdir DIR <releases>
 #     - Runs aggregate.py for each release and PRs (reads/writes ${WORKDIR}/jobs/)
 #     - Runs create-report.py to generate HTML (reads jobs/ and bugs/)
 
