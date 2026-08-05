@@ -23,6 +23,30 @@ from pathlib import Path
 
 log = logging.getLogger("doctor")
 
+_active_children = set()
+_children_lock = threading.Lock()
+
+
+def _register_child(proc):
+    with _children_lock:
+        _active_children.add(proc)
+
+
+def _unregister_child(proc):
+    with _children_lock:
+        _active_children.discard(proc)
+
+
+def _kill_all_children(signum, frame):
+    with _children_lock:
+        for proc in _active_children:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except OSError:
+                pass
+    sys.exit(128 + signum)
+
+
 COMPONENT_MAP = {
     "microshift-ci": "microshift",
     "lvms-ci": "lvm-operator",
@@ -205,6 +229,7 @@ class DoctorPipeline:
                     text=True,
                     start_new_session=True,
                 )
+                _register_child(proc)
                 timed_out = False
                 def _kill():
                     nonlocal timed_out
@@ -223,6 +248,7 @@ class DoctorPipeline:
                     proc.wait()
                 finally:
                     timer.cancel()
+                    _unregister_child(proc)
 
             stdout = "".join(output_lines)
             if timed_out:
@@ -741,16 +767,28 @@ def _run_claude_session(prompt, system_prompt, plugin_dir, model, log_path,
 
     try:
         with open(log_path, "w") as log_f:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
                 stdout=log_f,
                 stderr=subprocess.STDOUT,
-                timeout=timeout,
+                start_new_session=True,
                 env=env,
             )
+            _register_child(proc)
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except OSError:
+                    pass
+                proc.wait()
+                return None, None
+            finally:
+                _unregister_child(proc)
         final_text = _extract_result_text_standalone(log_path)
-        return result.returncode == 0, final_text
-    except subprocess.TimeoutExpired:
+        return proc.returncode == 0, final_text
+    except OSError:
         return None, None
 
 
@@ -818,6 +856,8 @@ def main():
         format="%(asctime)s %(levelname)s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    signal.signal(signal.SIGTERM, _kill_all_children)
+    signal.signal(signal.SIGINT, _kill_all_children)
     args = parse_args()
     pipeline = DoctorPipeline(args)
     sys.exit(pipeline.run())
