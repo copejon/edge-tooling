@@ -12,6 +12,7 @@ import argparse
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -202,12 +203,16 @@ class DoctorPipeline:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
+                    start_new_session=True,
                 )
                 timed_out = False
                 def _kill():
                     nonlocal timed_out
                     timed_out = True
-                    proc.kill()
+                    try:
+                        os.killpg(proc.pid, signal.SIGTERM)
+                    except OSError:
+                        pass
                 timer = threading.Timer(timeout, _kill)
                 timer.start()
                 try:
