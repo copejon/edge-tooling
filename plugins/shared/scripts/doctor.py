@@ -322,7 +322,7 @@ class DoctorPipeline:
             timed_out = any("Timed out" in e for e in r.get("validation_errors", []))
             hit_max_turns = max_turns_limit > 0 and num_turns >= max_turns_limit
 
-            parts = [f"  {label}: {status}, ${cost:.2f}"]
+            parts = [f"  {label}: {status}, ${cost:.2f}, {num_turns} turns"]
             if timed_out:
                 parts.append("TIMED OUT")
             if hit_max_turns:
