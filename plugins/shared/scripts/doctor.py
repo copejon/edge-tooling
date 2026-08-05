@@ -263,7 +263,8 @@ class DoctorPipeline:
             return False, ""
 
     def run_claude_session(self, prompt, system_prompt, log_path,
-                           max_turns=30, timeout=600):
+                           max_turns=30, timeout=600,
+                           allowed_tools=None, add_dirs=None):
         """Run a claude -p session, writing stream-json to log_path.
 
         Returns (success, final_text) where final_text is the last assistant
@@ -277,6 +278,8 @@ class DoctorPipeline:
             log_path=log_path,
             max_turns=max_turns,
             timeout=timeout,
+            allowed_tools=allowed_tools,
+            add_dirs=add_dirs,
         )
         if success is None:
             self.message(f"ERROR: claude -p timed out after {timeout}s: {log_path.name}")
@@ -562,6 +565,11 @@ class DoctorPipeline:
             log_path=log_path,
             max_turns=limits["max_turns"],
             timeout=limits["timeout"],
+            allowed_tools=["Skill", "Bash", "Read", "Write", "Glob", "Grep",
+                           "mcp__jira__jira_search", "mcp__jira__jira_get_issue",
+                           "mcp__jira__jira_create_issue", "mcp__jira__jira_update_issue",
+                           "mcp__jira__jira_add_comment"],
+            add_dirs=[str(self.workdir)],
         )
         if not ok:
             self.message("WARNING: Bug correlation session failed (non-fatal)")
@@ -761,7 +769,8 @@ def _extract_job_stats(log_path):
 
 
 def _run_claude_session(prompt, system_prompt, plugin_dir, model, log_path,
-                        max_turns=30, timeout=600, env=None):
+                        max_turns=30, timeout=600, env=None,
+                        allowed_tools=None, add_dirs=None):
     """Run a claude -p session, writing stream-json to log_path.
 
     Returns (success, final_text). Returns (None, None) on timeout.
@@ -775,6 +784,11 @@ def _run_claude_session(prompt, system_prompt, plugin_dir, model, log_path,
         "--output-format", "stream-json",
         "--verbose",
     ]
+    if allowed_tools:
+        cmd.extend(["--allowed-tools", ",".join(allowed_tools)])
+    if add_dirs:
+        for d in add_dirs:
+            cmd.extend(["--add-dir", d])
 
     try:
         with open(log_path, "w") as log_f:
@@ -825,6 +839,12 @@ def _analyze_single_job(job_info, plugin_dir, model, agent_system_prompt,
     env = os.environ.copy()
     env["CI_DOCTOR_RCA_SESSION"] = "1"
 
+    add_dirs = [d for d in [
+        job_info.get("artifacts_dir"),
+        job_info.get("graphs_dir"),
+        job_info.get("source_dir"),
+    ] if d]
+
     success, final_text = _run_claude_session(
         prompt=prompt,
         system_prompt=agent_system_prompt,
@@ -834,6 +854,8 @@ def _analyze_single_job(job_info, plugin_dir, model, agent_system_prompt,
         max_turns=limits["max_turns"],
         timeout=limits["timeout"],
         env=env,
+        allowed_tools=["Bash", "Read", "Glob", "Grep"],
+        add_dirs=add_dirs,
     )
 
     timed_out = success is None
