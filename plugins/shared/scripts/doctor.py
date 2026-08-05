@@ -333,7 +333,9 @@ class DoctorPipeline:
                 parts.append(f"HIT MAX TURNS ({num_turns}/{max_turns_limit})")
             if perm_denials > 0:
                 parts.append(f"{perm_denials} PERMISSION DENIALS")
-            if not timed_out and not hit_max_turns and hooks == 0:
+            if stats.get("context_exhausted"):
+                parts.append("CONTEXT EXHAUSTED")
+            if not r["success"] and not timed_out and not hit_max_turns and hooks == 0:
                 parts.append("stop hook did not run")
             elif hooks > 1:
                 first_hook = stats.get("first_hook_at_turn", 0)
@@ -741,6 +743,7 @@ def _extract_job_stats(log_path):
     permission_denials = 0
     parent_user_msgs = 0
     first_hook_at_turn = 0
+    context_exhausted = False
     try:
         with open(log_path, errors="replace") as f:
             for line in f:
@@ -759,6 +762,13 @@ def _extract_job_stats(log_path):
                     denials = record.get("permission_denials")
                     if isinstance(denials, list):
                         permission_denials = len(denials)
+                elif record.get("type") == "assistant" and not record.get("parent_tool_use_id"):
+                    msg = record.get("message", {})
+                    if isinstance(msg, dict):
+                        for block in msg.get("content", []):
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                if block.get("text", "").strip() == "Prompt is too long":
+                                    context_exhausted = True
                 elif record.get("type") == "user" and not record.get("parent_tool_use_id"):
                     is_hook = False
                     if record.get("isSynthetic"):
@@ -779,7 +789,8 @@ def _extract_job_stats(log_path):
         pass
     return {"cost_usd": cost_usd, "stop_hook_count": stop_hook_count,
             "num_turns": num_turns, "permission_denials": permission_denials,
-            "first_hook_at_turn": first_hook_at_turn}
+            "first_hook_at_turn": first_hook_at_turn,
+            "context_exhausted": context_exhausted}
 
 
 def _run_claude_session(prompt, system_prompt, plugin_dir, model, log_path,
