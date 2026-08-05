@@ -144,8 +144,6 @@ def parse_args():
                         help="Include pull request analysis")
     parser.add_argument("--repo",
                         help="GitHub org/repo for source checkout (e.g. openshift/microshift)")
-    parser.add_argument("--create-bugs", action="store_true",
-                        help="Run bug correlation (microshift only, dry-run)")
     return parser.parse_args()
 
 
@@ -180,8 +178,7 @@ class DoctorPipeline:
                 sys.exit(1)
             self.stages = requested
         else:
-            self.stages = [s for s in all_stages
-                           if s != "bugs" or args.create_bugs]
+            self.stages = list(all_stages)
 
         self.releases = [r.strip() for r in args.releases.split(",")]
         self.model = args.model
