@@ -574,9 +574,7 @@ class DoctorPipeline:
             max_turns=limits["max_turns"],
             timeout=limits["timeout"],
             allowed_tools=["Skill", "Bash", "Read", "Write", "Glob", "Grep",
-                           "mcp__jira__jira_search", "mcp__jira__jira_get_issue",
-                           "mcp__jira__jira_create_issue", "mcp__jira__jira_update_issue",
-                           "mcp__jira__jira_add_comment"],
+                           "mcp__jira__jira_search", "mcp__jira__jira_get_issue"],
             add_dirs=[str(self.workdir)],
         )
         if not ok:
