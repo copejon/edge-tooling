@@ -2104,8 +2104,11 @@ def main():
     diagnostics_path = os.path.join(workdir, "diagnostics.txt")
     diagnostics_text = None
     if os.path.isfile(diagnostics_path):
-        with open(diagnostics_path) as f:
-            diagnostics_text = f.read()
+        try:
+            with open(diagnostics_path, encoding="utf-8", errors="replace") as f:
+                diagnostics_text = f.read()
+        except OSError as e:
+            print(f"WARNING: could not read {diagnostics_path}: {e}", file=sys.stderr)
 
     # Generate HTML
     timestamp = datetime.now(timezone.utc)

@@ -138,7 +138,8 @@ def parse_args():
     parser.add_argument("--stages",
                         help="Comma-separated stages to run (default: all for component)")
     parser.add_argument("--component",
-                        help="Override auto-detected component (microshift or lvm-operator)")
+                        choices=["microshift", "lvm-operator"],
+                        help="Override auto-detected component")
     parser.add_argument("--pull-requests", action="store_true",
                         help="Include pull request analysis")
     parser.add_argument("--repo",
@@ -167,6 +168,7 @@ class DoctorPipeline:
         (self.workdir / "jobs").mkdir(parents=True, exist_ok=True)
 
         self.diagnostics_file = self.workdir / "diagnostics.txt"
+        self.diagnostics_file.write_text("")
 
         all_stages = ALL_STAGES_BY_COMPONENT.get(self.component, [])
         if args.stages:
@@ -248,6 +250,8 @@ class DoctorPipeline:
                     proc.wait()
                 finally:
                     timer.cancel()
+                    if proc.returncode == 0:
+                        timed_out = False
                     _unregister_child(proc)
 
             stdout = "".join(output_lines)
@@ -642,22 +646,8 @@ class DoctorPipeline:
         self._write_cost_diagnostics(costs)
         return costs
 
-    def _print_cost_summary(self, costs):
-        log.info("Cost Summary:")
-        for stage, data in costs["stages"].items():
-            log.info("  %s:", stage.capitalize())
-            for release, rel_data in sorted(data["releases"].items()):
-                n = len(rel_data["jobs"])
-                cost = rel_data["cost_usd"]
-                avg = cost / n if n else 0
-                log.info("    %s: %d jobs, $%.2f (avg $%.3f/job)",
-                         release, n, cost, avg)
-            total_jobs = sum(len(r["jobs"]) for r in data["releases"].values())
-            log.info("    Total: %d jobs, $%.2f",
-                     total_jobs, data["total_cost_usd"])
-        log.info("  Grand Total: $%.2f", costs["total_cost_usd"])
-
-    def _write_cost_diagnostics(self, costs):
+    @staticmethod
+    def _format_cost_summary(costs):
         lines = ["Cost Summary:"]
         for stage, data in costs["stages"].items():
             lines.append(f"  {stage.capitalize()}:")
@@ -669,6 +659,14 @@ class DoctorPipeline:
             total_jobs = sum(len(r["jobs"]) for r in data["releases"].values())
             lines.append(f"    Total: {total_jobs} jobs, ${data['total_cost_usd']:.2f}")
         lines.append(f"  Grand Total: ${costs['total_cost_usd']:.2f}")
+        return lines
+
+    def _print_cost_summary(self, costs):
+        for line in self._format_cost_summary(costs):
+            log.info(line)
+
+    def _write_cost_diagnostics(self, costs):
+        lines = self._format_cost_summary(costs)
         with open(self.diagnostics_file, "a") as f:
             f.write("\n".join(lines) + "\n")
 
