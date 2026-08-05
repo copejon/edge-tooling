@@ -164,7 +164,7 @@ If any bugs were actually closed successfully in Step 4, write `<WORKDIR>/close-
 
 Include only keys that were closed successfully (not failed). Do not write this file in dry-run mode or if no bugs were closed.
 
-This file is consumed by `/microshift-ci:doctor-refresh` to exclude closed bugs from the HTML report.
+This file is consumed by `doctor.py --stages finalize` to exclude closed bugs from the HTML report.
 
 ## Examples
 
@@ -188,7 +188,7 @@ Actually closes all matching bugs in JIRA.
 
 - **doctor.py**: Deterministic pipeline script (produces the bugs summary file consumed by this skill)
 - **microshift-ci:create-bugs**: Bug correlation and creation (should run before this skill)
-- **microshift-ci:doctor-refresh**: Regenerate the HTML report (should run after this skill to reflect closures)
+- **doctor.py --stages finalize**: Regenerate the HTML report (should run after this skill to reflect closures)
 
 ## Notes
 
