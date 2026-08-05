@@ -635,16 +635,13 @@ class DoctorPipeline:
             for release, rel_data in sorted(data["releases"].items()):
                 n = len(rel_data["jobs"])
                 cost = rel_data["cost_usd"]
-                dur = rel_data["duration_ms"] / 1000
                 avg = cost / n if n else 0
-                log.info("    %s: %d jobs, $%.2f (avg $%.3f/job), %.0fs",
-                         release, n, cost, avg, dur)
-            total = data["total_cost_usd"]
-            dur = data["total_duration_ms"] / 1000
+                log.info("    %s: %d jobs, $%.2f (avg $%.3f/job)",
+                         release, n, cost, avg)
             total_jobs = sum(len(r["jobs"]) for r in data["releases"].values())
-            log.info("    Total: %d jobs, $%.2f, %.0fs", total_jobs, total, dur)
-        log.info("  Grand Total: $%.2f, %.0fs",
-                 costs["total_cost_usd"], costs["total_duration_ms"] / 1000)
+            log.info("    Total: %d jobs, $%.2f",
+                     total_jobs, data["total_cost_usd"])
+        log.info("  Grand Total: $%.2f", costs["total_cost_usd"])
 
     def _write_cost_diagnostics(self, costs):
         lines = ["Cost Summary:"]
@@ -654,11 +651,10 @@ class DoctorPipeline:
                 n = len(rel_data["jobs"])
                 cost = rel_data["cost_usd"]
                 avg = cost / n if n else 0
-                dur = rel_data["duration_ms"] / 1000
-                lines.append(f"    {release}: {n} jobs, ${cost:.2f} (avg ${avg:.3f}/job), {dur:.0f}s")
+                lines.append(f"    {release}: {n} jobs, ${cost:.2f} (avg ${avg:.3f}/job)")
             total_jobs = sum(len(r["jobs"]) for r in data["releases"].values())
-            lines.append(f"    Total: {total_jobs} jobs, ${data['total_cost_usd']:.2f}, {data['total_duration_ms'] / 1000:.0f}s")
-        lines.append(f"  Grand Total: ${costs['total_cost_usd']:.2f}, {costs['total_duration_ms'] / 1000:.0f}s")
+            lines.append(f"    Total: {total_jobs} jobs, ${data['total_cost_usd']:.2f}")
+        lines.append(f"  Grand Total: ${costs['total_cost_usd']:.2f}")
         with open(self.diagnostics_file, "a") as f:
             f.write("\n".join(lines) + "\n")
 
