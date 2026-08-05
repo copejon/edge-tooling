@@ -314,6 +314,7 @@ class DoctorPipeline:
             cost = stats.get("cost_usd", 0)
             hooks = stats.get("stop_hook_count", 0)
             num_turns = stats.get("num_turns", 0)
+            perm_denials = stats.get("permission_denials", 0)
             status = "OK" if r["success"] else "FAILED"
             timed_out = any("Timed out" in e for e in r.get("validation_errors", []))
             hit_max_turns = max_turns_limit > 0 and num_turns >= max_turns_limit
@@ -321,12 +322,12 @@ class DoctorPipeline:
             parts = [f"  {label}: {status}, ${cost:.2f}"]
             if timed_out:
                 parts.append("TIMED OUT")
-            elif hit_max_turns:
+            if hit_max_turns:
                 parts.append(f"HIT MAX TURNS ({num_turns}/{max_turns_limit})")
-                if hooks > 1:
-                    parts.append(f"stop hook fired {hooks}x")
-            elif hooks == 0:
-                parts.append("NO STOP HOOK (validation did not run!)")
+            if perm_denials > 0:
+                parts.append(f"{perm_denials} PERMISSION DENIALS")
+            if not timed_out and not hit_max_turns and hooks == 0:
+                parts.append("stop hook did not run")
             elif hooks > 1:
                 parts.append(f"stop hook fired {hooks}x")
             lines.append(", ".join(parts))
@@ -722,10 +723,11 @@ def _extract_result_text_standalone(log_path):
 
 
 def _extract_job_stats(log_path):
-    """Extract cost, stop hook count, and turn count from a stream-json log."""
+    """Extract cost, stop hook count, turn count, and permission denials from a stream-json log."""
     cost_usd = 0
     stop_hook_count = 0
     num_turns = 0
+    permission_denials = 0
     try:
         with open(log_path, errors="replace") as f:
             for line in f:
@@ -741,6 +743,9 @@ def _extract_job_stats(log_path):
                 if record.get("type") == "result":
                     cost_usd = record.get("total_cost_usd", 0)
                     num_turns = record.get("num_turns", 0)
+                    denials = record.get("permission_denials")
+                    if isinstance(denials, list):
+                        permission_denials = len(denials)
                 elif (record.get("isSynthetic") and record.get("type") == "user"):
                     msg = record.get("message", {})
                     if isinstance(msg, dict):
@@ -752,7 +757,7 @@ def _extract_job_stats(log_path):
     except OSError:
         pass
     return {"cost_usd": cost_usd, "stop_hook_count": stop_hook_count,
-            "num_turns": num_turns}
+            "num_turns": num_turns, "permission_denials": permission_denials}
 
 
 def _run_claude_session(prompt, system_prompt, plugin_dir, model, log_path,
