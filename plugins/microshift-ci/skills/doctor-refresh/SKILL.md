@@ -16,7 +16,7 @@ allowed-tools: Bash, Read, Glob
 
 ## Description
 
-Regenerates the CI Doctor HTML report from existing data. Use this after `/microshift-ci:create-bugs --create` to update the report with newly created bugs.
+Regenerates the CI Doctor HTML report from existing data. Use this after `/microshift-ci:create-bugs --create` to update the report with newly created bugs. Alternatively, use `doctor.py --stages finalize`.
 
 This is a lightweight operation: it does not re-analyze jobs, re-aggregate summaries, or re-query JIRA. It reads the existing bug mapping files (which include newly created bugs via the create-bugs Step 4c update) and regenerates the HTML.
 
@@ -41,7 +41,7 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
 
    ```text
    Error: no workdir found at <WORKDIR>
-   Run the full doctor workflow first: /microshift-ci:doctor <releases>
+   Run the full doctor pipeline first: python3 plugins/microshift-ci/scripts/doctor.py --releases <releases> --workdir <WORKDIR>
    ```
 
 ### Step 2: Verify Bug Mapping Files
@@ -94,12 +94,12 @@ Display the path to the regenerated HTML report.
 
 ## Prerequisites
 
-- An existing workdir from a prior `/microshift-ci:doctor` run
+- An existing workdir from a prior `doctor.py` run
 - Bug mapping files from a prior `/microshift-ci:create-bugs` run
 
 ## Related Skills
 
-- **microshift-ci:doctor**: Full CI analysis workflow (produces the initial HTML report)
+- **doctor.py**: Deterministic pipeline script (produces the initial HTML report)
 - **microshift-ci:create-bugs**: Bug correlation and creation (produces the bug mapping files consumed by this skill)
 
 ## Notes

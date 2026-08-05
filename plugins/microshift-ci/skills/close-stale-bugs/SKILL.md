@@ -37,7 +37,7 @@ Operates in **dry-run mode by default** — shows which bugs would be closed wit
 
 ## Prerequisites
 
-- An existing workdir from a prior `/microshift-ci:doctor` run (today's date)
+- An existing workdir from a prior `doctor.py` run (today's date)
 - `bugs/bug-matches-summary.json` must exist in the workdir (produced by the doctor finalize step)
 - MCP Jira server must be configured and accessible (for `--close` mode)
 
@@ -59,7 +59,7 @@ Compute once at the start by running `date +%y%m%d` and substituting into the pa
 
    ```text
    Error: bugs/bug-matches-summary.json not found in <WORKDIR>
-   Run the full doctor workflow first: /microshift-ci:doctor <releases>
+   Run the full doctor pipeline first: python3 plugins/microshift-ci/scripts/doctor.py --releases <releases> --workdir <WORKDIR>
    ```
 
 4. Parse the JSON. Check the `jira_query_available` field. If it is `false`, report a **warning** and stop:
@@ -186,7 +186,7 @@ Actually closes all matching bugs in JIRA.
 
 ## Related Skills
 
-- **microshift-ci:doctor**: Full CI analysis workflow (produces the bugs summary file consumed by this skill)
+- **doctor.py**: Deterministic pipeline script (produces the bugs summary file consumed by this skill)
 - **microshift-ci:create-bugs**: Bug correlation and creation (should run before this skill)
 - **microshift-ci:doctor-refresh**: Regenerate the HTML report (should run after this skill to reflect closures)
 
