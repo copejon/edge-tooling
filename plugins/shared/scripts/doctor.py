@@ -332,7 +332,12 @@ class DoctorPipeline:
             if not timed_out and not hit_max_turns and hooks == 0:
                 parts.append("stop hook did not run")
             elif hooks > 1:
-                parts.append(f"stop hook fired {hooks}x")
+                first_hook = stats.get("first_hook_at_turn", 0)
+                wasted = num_turns - first_hook if first_hook > 0 else 0
+                if wasted > 0:
+                    parts.append(f"stop hook fired {hooks}x ({wasted} turns wasted on retries)")
+                else:
+                    parts.append(f"stop hook fired {hooks}x")
             lines.append(", ".join(parts))
 
         with open(self.diagnostics_file, "a") as f:
@@ -736,6 +741,8 @@ def _extract_job_stats(log_path):
     stop_hook_count = 0
     num_turns = 0
     permission_denials = 0
+    parent_user_msgs = 0
+    first_hook_at_turn = 0
     try:
         with open(log_path, errors="replace") as f:
             for line in f:
@@ -754,18 +761,27 @@ def _extract_job_stats(log_path):
                     denials = record.get("permission_denials")
                     if isinstance(denials, list):
                         permission_denials = len(denials)
-                elif (record.get("isSynthetic") and record.get("type") == "user"):
-                    msg = record.get("message", {})
-                    if isinstance(msg, dict):
-                        content = msg.get("content", [])
-                        if isinstance(content, list):
-                            for block in content:
-                                if isinstance(block, dict) and "Stop hook feedback:" in block.get("text", ""):
-                                    stop_hook_count += 1
+                elif record.get("type") == "user" and not record.get("parent_tool_use_id"):
+                    is_hook = False
+                    if record.get("isSynthetic"):
+                        msg = record.get("message", {})
+                        if isinstance(msg, dict):
+                            content = msg.get("content", [])
+                            if isinstance(content, list):
+                                for block in content:
+                                    if isinstance(block, dict) and "Stop hook feedback:" in block.get("text", ""):
+                                        is_hook = True
+                                        break
+                    if is_hook:
+                        stop_hook_count += 1
+                        if stop_hook_count == 1:
+                            first_hook_at_turn = parent_user_msgs + 1
+                    parent_user_msgs += 1
     except OSError:
         pass
     return {"cost_usd": cost_usd, "stop_hook_count": stop_hook_count,
-            "num_turns": num_turns, "permission_denials": permission_denials}
+            "num_turns": num_turns, "permission_denials": permission_denials,
+            "first_hook_at_turn": first_hook_at_turn}
 
 
 def _run_claude_session(prompt, system_prompt, plugin_dir, model, log_path,
