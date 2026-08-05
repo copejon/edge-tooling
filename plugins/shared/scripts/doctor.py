@@ -58,7 +58,7 @@ ALL_STAGES_BY_COMPONENT = {
 }
 
 STAGE_LIMITS = {
-    "analyze": {"max_turns": 30, "timeout": 2700},
+    "analyze": {"max_turns": 100, "timeout": 2700},
     "bugs": {"max_turns": 50, "timeout": 900},
 }
 
