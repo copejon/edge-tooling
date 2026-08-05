@@ -63,7 +63,7 @@ STAGE_LIMITS = {
 }
 
 DOCTOR_SH_TIMEOUT = {
-    "prepare": 1200,
+    "prepare": 1800,
     "graphs": 600,
     "finalize": 300,
 }
