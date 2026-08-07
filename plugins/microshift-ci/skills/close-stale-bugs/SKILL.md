@@ -164,7 +164,7 @@ If any bugs were actually closed successfully in Step 4, write `<WORKDIR>/close-
 
 Include only keys that were closed successfully (not failed). Do not write this file in dry-run mode or if no bugs were closed.
 
-This file is consumed by `run-doctor.py --stages finalize` to exclude closed bugs from the HTML report.
+This file is read by `run-doctor.py --stages finalize`, which passes the closed keys via `--ignore` to exclude them from the HTML report.
 
 ## Examples
 

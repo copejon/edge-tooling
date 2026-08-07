@@ -94,7 +94,7 @@ Plugin components serve different roles. Choosing the right one matters.
 
 | Component | User-invocable | Purpose | Example |
 |-----------|---------------|---------|---------|
-| **Skill** | Yes (`/name`) | User-facing workflows, multi-step procedures, orchestration | `/microshift-ci:doctor` |
+| **Skill** | Yes (`/name`) | User-facing workflows, multi-step procedures, orchestration | `/microshift-ci:create-bugs` |
 | **Agent** | No | Focused subtasks spawned by a skill, often run in parallel | `release-health:Epic Fetcher` |
 | **Hook** | No | Event-driven automation (session start, tool validation) | `detect-new-tools.sh` |
 
@@ -158,7 +158,6 @@ jira:create-epic       — enforces epic-specific field standards
 jira:create-story      — enforces story-specific acceptance criteria format
 jira:link-to-epic      — links stories to parent epics
 
-microshift-ci:doctor   — orchestrates full CI analysis
 microshift-ci:prow-job — analyzes a single Prow job
 microshift-ci:test-job — analyzes a single test execution
 ```

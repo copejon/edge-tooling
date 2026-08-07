@@ -12,6 +12,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -24,7 +25,7 @@ from pathlib import Path
 log = logging.getLogger("doctor")
 
 _active_children = set()
-_children_lock = threading.Lock()
+_children_lock = threading.RLock()
 
 
 def _register_child(proc):
@@ -191,6 +192,7 @@ class DoctorPipeline:
         self._agent_system_prompt = None
 
         self.prepare_summary = None
+        self.analyze_costs = {}
 
     @property
     def agent_system_prompt(self):
@@ -290,7 +292,7 @@ class DoctorPipeline:
     def extract_cost(self, log_path):
         """Extract cost_usd and duration_ms from a stream-json result event."""
         try:
-            with open(log_path) as f:
+            with open(log_path, errors="replace") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -448,6 +450,10 @@ class DoctorPipeline:
                         "validation_errors": validation_errors,
                         "stats": stats,
                     }
+                    self.analyze_costs[job_info["log_name"]] = {
+                        "cost_usd": stats.get("cost_usd", 0),
+                        "duration_ms": stats.get("duration_ms", 0),
+                    }
                     if success:
                         log.info("[OK] %s", label)
                     else:
@@ -562,8 +568,22 @@ class DoctorPipeline:
             log.info("Bug correlation is microshift-only, skipping")
             return True
 
-        releases_str = ",".join(self.releases)
-        prompt = f"/microshift-ci:create-bugs {releases_str}"
+        sources = list(self.releases)
+        prs_status_path = self.workdir / "jobs" / "prs-status.json"
+        if prs_status_path.exists():
+            try:
+                prs_status = json.loads(prs_status_path.read_text())
+                for pr in prs_status:
+                    m = re.search(r"rebase-release-([\d.]+)", pr.get("title", ""))
+                    if m:
+                        rebase_src = f"rebase-release-{m.group(1)}"
+                        if rebase_src not in sources:
+                            sources.append(rebase_src)
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        sources_str = ",".join(sources)
+        prompt = f"/microshift-ci:create-bugs {sources_str}"
         log_path = self.logs_dir / "create-bugs.log"
         limits = STAGE_LIMITS["bugs"]
 
@@ -583,7 +603,20 @@ class DoctorPipeline:
 
     def finalize(self):
         log.info("=== Stage: finalize ===")
-        ok, _ = self.run_doctor_sh("finalize", [",".join(self.releases)], "finalize.log")
+        extra = [",".join(self.releases)]
+
+        closed_bugs_path = self.workdir / "close-stale-bugs" / "closed-bugs.json"
+        if closed_bugs_path.exists():
+            try:
+                data = json.loads(closed_bugs_path.read_text())
+                closed = data.get("closed", [])
+                if closed:
+                    extra.extend(["--ignore", ",".join(closed)])
+                    log.info("Excluding %d closed bugs from report", len(closed))
+            except (json.JSONDecodeError, OSError) as e:
+                log.warning("Could not read %s: %s", closed_bugs_path, e)
+
+        ok, _ = self.run_doctor_sh("finalize", extra, "finalize.log")
         return ok
 
     # ------------------------------------------------------------------
@@ -595,7 +628,11 @@ class DoctorPipeline:
         costs = {"stages": {}, "total_cost_usd": 0, "total_duration_ms": 0}
 
         for log_file in sorted(self.logs_dir.glob("*.log")):
-            cost_info = self.extract_cost(log_file)
+            cached = self.analyze_costs.get(log_file.name)
+            if cached:
+                cost_info = cached
+            else:
+                cost_info = self.extract_cost(log_file)
             if cost_info["cost_usd"] > 0:
                 stage = "other"
                 release = "all"
@@ -709,17 +746,23 @@ class DoctorPipeline:
 
 
 # ----------------------------------------------------------------------
-# Module-level function for ProcessPoolExecutor (must be picklable)
+# Module-level helpers for ThreadPoolExecutor workers
 # ----------------------------------------------------------------------
+
+_validate_module = None
+
 
 def _load_validate_module():
     """Import validate-rca-output.py via importlib (filename contains dashes)."""
-    import importlib.util
-    script = Path(__file__).resolve().parent / "validate-rca-output.py"
-    spec = importlib.util.spec_from_file_location("validate_rca_output", script)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    global _validate_module
+    if _validate_module is None:
+        import importlib.util
+        script = Path(__file__).resolve().parent / "validate-rca-output.py"
+        spec = importlib.util.spec_from_file_location("validate_rca_output", script)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _validate_module = mod
+    return _validate_module
 
 
 def _run_validation(text):
@@ -733,6 +776,7 @@ def _extract_result_text_standalone(log_path):
 def _extract_job_stats(log_path):
     """Extract cost, stop hook count, turn count, and permission denials from a stream-json log."""
     cost_usd = 0
+    duration_ms = 0
     stop_hook_count = 0
     num_turns = 0
     permission_denials = 0
@@ -753,6 +797,7 @@ def _extract_job_stats(log_path):
                     continue
                 if record.get("type") == "result":
                     cost_usd = record.get("total_cost_usd", 0)
+                    duration_ms = record.get("duration_ms", 0)
                     num_turns = record.get("num_turns", 0)
                     denials = record.get("permission_denials")
                     if isinstance(denials, list):
@@ -782,7 +827,8 @@ def _extract_job_stats(log_path):
                     parent_user_msgs += 1
     except OSError:
         pass
-    return {"cost_usd": cost_usd, "stop_hook_count": stop_hook_count,
+    return {"cost_usd": cost_usd, "duration_ms": duration_ms,
+            "stop_hook_count": stop_hook_count,
             "num_turns": num_turns, "permission_denials": permission_denials,
             "first_hook_at_turn": first_hook_at_turn,
             "context_exhausted": context_exhausted}
@@ -833,8 +879,9 @@ def _run_claude_session(prompt, system_prompt, plugin_dir, model, log_path,
                 _unregister_child(proc)
         final_text = _extract_result_text_standalone(log_path)
         return proc.returncode == 0, final_text
-    except OSError:
-        return None, None
+    except OSError as e:
+        log.error("Failed to start claude: %s", e)
+        return False, None
 
 
 def _analyze_single_job(job_info, plugin_dir, model, agent_system_prompt,
