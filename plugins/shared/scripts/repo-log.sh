@@ -50,7 +50,7 @@ main() {
 
     if ! git -C "${repo_dir}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         echo "Error: not a git work tree: ${repo_dir}" >&2
-        echo "Hint: run 'doctor.sh prepare ... --repo <org/name>' first to create the source checkout." >&2
+        echo "Hint: run 'doctor-helper.sh prepare ... --repo <org/name>' first to create the source checkout." >&2
         exit 1
     fi
 

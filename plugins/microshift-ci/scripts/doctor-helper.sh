@@ -1,0 +1,1 @@
+../../shared/scripts/doctor-helper.sh

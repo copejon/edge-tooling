@@ -206,4 +206,4 @@ Save the report to `<WORKDIR>/report-fix-test-bugs.txt` (overwrites the dry-run 
 
 - **microshift-ci:create-bugs**: Creates JIRA bugs from CI analysis — produces the merged candidates file consumed by this skill
 - **microshift-ci:close-stale-bugs**: Closes stale bugs that no longer match current CI failures
-- **microshift-ci:doctor**: Produces the CI analysis that feeds into bug creation
+- **run-doctor.py**: Deterministic pipeline script that orchestrates the CI analysis pipeline (runs `prow-job-analyzer` agents, bug correlation, and HTML report generation)

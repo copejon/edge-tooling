@@ -7,16 +7,16 @@ set -euo pipefail
 #
 # Two phases called by the doctor skill with LLM steps in between:
 #
-#   doctor.sh prepare --component <component> --workdir DIR <releases> [--pull-requests]
+#   doctor-helper.sh prepare --component <component> --workdir DIR <releases> [--pull-requests]
 #     - Collects failed jobs for each release
 #     - Downloads all artifacts in parallel
 #     - Writes per-release and PR jobs JSON files to ${WORKDIR}/jobs/
 #
-#   doctor.sh graphs --component <component> --workdir DIR [--timezone TZ]
+#   doctor-helper.sh graphs --component <component> --workdir DIR [--timezone TZ]
 #     - Generates PCP performance graphs for all jobs with pmlogs
 #     - Outputs PNG files to ${WORKDIR}/graphs/<build_id>/
 #
-#   doctor.sh finalize --component <component> --workdir DIR <releases>
+#   doctor-helper.sh finalize --component <component> --workdir DIR <releases>
 #     - Runs aggregate.py for each release and PRs (reads/writes ${WORKDIR}/jobs/)
 #     - Runs create-report.py to generate HTML (reads jobs/ and bugs/)
 
@@ -329,11 +329,17 @@ cmd_prepare() {
 
 cmd_finalize() {
     local releases_arg=""
+    local ignore_keys=""
 
     while [[ ${#} -gt 0 ]]; do
         case "${1}" in
             --workdir) WORKDIR="${2}"; shift 2 ;;
             --component) COMPONENT="${2}"; shift 2 ;;
+            --ignore)
+                if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+                    echo "Error: --ignore requires a non-empty argument" >&2; return 1
+                fi
+                ignore_keys="${2}"; shift 2 ;;
             -*) echo "Unknown option: ${1}" >&2; return 1 ;;
             *) releases_arg="${1}"; shift ;;
         esac
@@ -345,7 +351,7 @@ cmd_finalize() {
 
     if [[ -z "${releases_arg}" ]]; then
         echo "Error: releases argument required" >&2
-        echo "Usage: $(basename "$0") finalize --component <component> [--workdir DIR] <release1,release2,...>" >&2
+        echo "Usage: $(basename "$0") finalize --component <component> [--workdir DIR] [--ignore KEY1,KEY2,...] <release1,release2,...>" >&2
         return 1
     fi
 
@@ -415,8 +421,11 @@ cmd_finalize() {
 
     # Generate HTML report
     echo "=== Generating HTML report ===" >&2
-    python3 "${SCRIPT_DIR}/create-report.py" \
-        --component "${COMPONENT}" --workdir "${WORKDIR}" "${releases_arg}"
+    local -a report_args=(--component "${COMPONENT}" --workdir "${WORKDIR}")
+    if [[ -n "${ignore_keys}" ]]; then
+        report_args+=(--ignore "${ignore_keys}")
+    fi
+    python3 "${SCRIPT_DIR}/create-report.py" "${report_args[@]}" "${releases_arg}"
 }
 
 # ---------------------------------------------------------------------------
@@ -515,7 +524,7 @@ usage() {
     echo "Commands:" >&2
     echo "  prepare  --component C [--workdir DIR] <releases> [--pull-requests] [--repo ORG/NAME]  Collect jobs, download artifacts, optional source checkout" >&2
     echo "  graphs   --component C [--workdir DIR] [--timezone TZ]       Generate PCP performance graphs" >&2
-    echo "  finalize --component C [--workdir DIR] <releases>             Aggregate results and generate HTML" >&2
+    echo "  finalize --component C [--workdir DIR] [--ignore KEY1,KEY2,...] <releases>  Aggregate results and generate HTML" >&2
     echo "  refresh  --component C [--workdir DIR] [--ignore KEY1,KEY2,...] <releases>  Regenerate HTML from existing workdir data" >&2
     echo "" >&2
     echo "  --component C: component name (e.g., microshift, lvms)" >&2

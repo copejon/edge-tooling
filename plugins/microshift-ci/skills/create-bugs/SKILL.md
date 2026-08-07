@@ -17,7 +17,7 @@ allowed-tools: Bash, Read, Write, Glob, Grep, Agent, mcp__jira__jira_search, mcp
 
 ## Description
 
-Reads individual job analysis reports produced by `microshift-ci:doctor` and creates JIRA bugs in USHIFT for CI test failures. Operates in **dry-run mode by default** - it shows what bugs would be created without actually creating them. Use `--create` to perform actual issue creation.
+Reads individual job analysis reports produced by the `prow-job-analyzer` agent and creates JIRA bugs in USHIFT for CI test failures. Operates in **dry-run mode by default** - it shows what bugs would be created without actually creating them. Use `--create` to perform actual issue creation.
 
 Candidates are always **fuzzy-matched across sources** using token-based overlap similarity (50% threshold) with step-name bucketing — the same root cause appearing in multiple releases becomes a single candidate and a single Jira bug referencing all affected releases.
 
@@ -35,8 +35,8 @@ This command does NOT re-analyze CI jobs. It consumes existing job analysis file
 ## Prerequisites
 
 - Job analysis files must already exist in `<WORKDIR>/jobs/`:
-  - For releases: `jobs/release-<release>-job-*.json` (produced by `/microshift-ci:doctor`)
-  - For PRs: `jobs/prs-job-*-pr<number>-*.json` (produced by `/microshift-ci:doctor`)
+  - For releases: `jobs/release-<release>-job-*.json` (produced by the `prow-job-analyzer` agent)
+  - For PRs: `jobs/prs-job-*-pr<number>-*.json` (produced by the `prow-job-analyzer` agent)
 - Each job file must be a valid JSON array (see below)
 - MCP Jira server must be configured and accessible
 - User must have permissions to create issues in USHIFT
@@ -581,8 +581,8 @@ No job files found for 4.19 in <WORKDIR>
 
 - This command does NOT run CI analysis — it only consumes existing analysis files from `<WORKDIR>`
 - Supports two file naming patterns:
-  - Release jobs: `jobs/release-<release>-job-*.json` (from `/microshift-ci:doctor`)
-  - PR jobs: `jobs/prs-job-*-pr<number>-*.json` (from `/microshift-ci:doctor`)
+  - Release jobs: `jobs/release-<release>-job-*.json` (from the `prow-job-analyzer` agent)
+  - PR jobs: `jobs/prs-job-*-pr<number>-*.json` (from the `prow-job-analyzer` agent)
 - Dry-run is the default to prevent accidental bug creation
 - The `--create` flag enables actual bug creation and updating
 - Candidates are always merged via `search-bugs.py --merge` (even for a single source) to produce a unified output with Jira data injected. Cross-release deduplication uses fuzzy signature matching (token-based overlap similarity, 50% threshold)
@@ -594,7 +594,7 @@ No job files found for 4.19 in <WORKDIR>
 
 ## Related Skills
 
-- **microshift-ci:doctor**: Produces job analysis files consumed by this command
+- **run-doctor.py**: Deterministic pipeline script that produces job analysis files consumed by this command
 - **microshift-ci:prow-job**: Command that produces individual job reports as JSON
 - **jira:create-bug**: Single bug creation skill (not used here — we call MCP directly)
 - **microshift-ci:close-stale-bugs**: Closes stale unlinked bugs (should run after this skill)
