@@ -513,7 +513,7 @@ class DoctorPipeline:
                     "is_pr": False,
                 })
 
-        pr_info = summary.get("pull_requests", {})
+        pr_info = summary.get("prs", {})
         pr_jobs_file = pr_info.get("jobs_file")
         if pr_jobs_file:
             try:
