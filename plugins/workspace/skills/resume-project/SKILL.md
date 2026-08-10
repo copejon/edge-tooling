@@ -39,6 +39,25 @@ no path joining is needed.
 3. **Do NOT read `P.repo_context_files` or `P.domain_docs` yet.** Store
    both lists for on-demand loading (see Step 5).
 
+## Step 2.5: Enter Self-Repo Worktree
+
+If `P.frontmatter.worktree_path` is present (self-repo project with
+worktree isolation):
+
+1. Call `EnterWorktree` with `path` set to
+   `P.frontmatter.worktree_path`.
+2. If `EnterWorktree` succeeds, note for Step 3: "Entered worktree at
+   `<worktree_path>` on branch `<P.frontmatter.branch>`."
+3. If `EnterWorktree` errors (path no longer exists), warn the user and
+   offer via AskUserQuestion:
+   - **"Recreate worktree"** — call `EnterWorktree` with `name` set to
+     `P.frontmatter.branch`. Update `worktree_path` in the project
+     CLAUDE.md frontmatter (Edit tool) with the new path.
+   - **"Continue without worktree"** — proceed without isolation; note
+     in Step 3 summary that the worktree is missing.
+
+If `P.frontmatter.worktree_path` is absent, skip this step.
+
 ## Step 3: Present Summary
 
 Display a structured summary:
@@ -86,6 +105,17 @@ If any worktree is MISSING, suggest how to recreate it (paths in
 
 Add: "When working on code changes, use the worktree paths above
 instead of the main checkout."
+
+**If `P.frontmatter.worktree_path` is present (self-repo worktree):**
+Show the worktree status:
+
+> **Worktree:** `<worktree_path>` → branch `<branch>` (active)
+
+If Step 2.5 entered the worktree successfully, add: "Session is in the
+worktree — code changes apply to branch `<branch>`."
+
+If the worktree was missing and recreated, note: "Worktree was missing
+and has been recreated at `<new-path>`."
 
 **If `P.frontmatter.skills` is non-empty:**
 Verify the project's linked skills:
