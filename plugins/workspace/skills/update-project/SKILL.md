@@ -48,7 +48,8 @@ Review the conversation history and identify:
    in the frontmatter to today's date when any other update is applied.
    If the field does not exist yet, add it after the `status:` line.
 
-If nothing to update, say so and stop.
+If nothing to update, stop silently — produce no output at all. This
+keeps `/loop` invocations quiet when the session has been idle.
 
 ## Step 4: Dispatch to Background Agent
 
