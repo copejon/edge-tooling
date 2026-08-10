@@ -60,7 +60,9 @@ If no notes were provided in the arguments, ask the user:
 ## Step 2.5: Worktree & Skill Cleanup
 
 Substeps 2.5a-2.5d apply if `P.worktree_status` (from Step 1's
-resume-project.py output) is non-empty; substep 2.5e applies if
+resume-project.py output) is non-empty (multi-repo worktrees).
+Substep 2.5s applies if `P.frontmatter.worktree_path` is present
+(self-repo worktree). Substep 2.5e applies if
 `P.frontmatter.skills` is non-empty. Substep 2.5f always runs.
 
 **2.5a. Display worktree status**
@@ -135,6 +137,58 @@ in Step 3b (set to `worktrees: []`).
 If worktrees were kept, leave the field as-is and add a note to the
 closing summary: "Worktrees preserved — branches still active in repos."
 
+**2.5s. Self-repo worktree cleanup**
+
+This substep applies only when `P.frontmatter.worktree_path` is present
+and `P.worktree_status` is empty (self-repo project, not multi-repo).
+
+1. Check dirty state inside the worktree:
+
+   ```bash
+   git -C <P.frontmatter.worktree_path> status --porcelain
+   git -C <P.frontmatter.worktree_path> rev-list --count @{upstream}..HEAD 2>/dev/null
+   ```
+
+   Derive status using the same logic as 2.5a (dirty/ahead/no-upstream).
+
+2. If the worktree needs attention (dirty, ahead, or no upstream),
+   present the same AskUserQuestion as 2.5b:
+   - "Commit and push changes before closing"
+   - "Discard changes and remove worktree"
+   - "Keep worktree (close project but leave it in place)"
+
+   If "commit and push": help the user commit and push. For
+   `no_upstream` branches: `git -C <worktree_path> push -u fork <branch>`.
+
+3. If removing the worktree:
+   - **If the session is currently in the worktree** (i.e., the user
+     resumed the project via `/workspace:resume-project` in this
+     session, which called `EnterWorktree(path)`): call `ExitWorktree`
+     with `action: "remove"`. If the worktree has uncommitted changes
+     and the user chose "Discard", set `discard_changes: true`.
+   - **If the session is NOT in the worktree** (user is closing without
+     having resumed first): `ExitWorktree` is a no-op in this case.
+     Fall back to git:
+
+     ```bash
+     # Clean worktree:
+     git worktree remove <P.frontmatter.worktree_path>
+     # Dirty worktree (user chose "Discard"):
+     git worktree remove --force <P.frontmatter.worktree_path>
+     ```
+
+     Then delete the local branch:
+     ```bash
+     git branch -d <P.frontmatter.branch>
+     ```
+
+4. If the worktree path does not exist on disk (already removed
+   externally), skip removal silently.
+
+5. If the user chose to keep the worktree, leave it in place and add a
+   note to the closing summary: "Worktree preserved at
+   `<worktree_path>` — branch `<branch>` still active."
+
 **2.5e. Remove skill symlinks**
 
 If `P.frontmatter.skills` is non-empty, check which linked skills are
@@ -197,6 +251,10 @@ Using the Edit tool, update the YAML frontmatter:
 4. If worktrees were removed in Step 2.5, change the `worktrees:`
    list to `worktrees: []`. Leave `branch:` as-is for historical
    reference.
+   For self-repo projects: if the worktree was removed in Step 2.5s,
+   remove the `worktree_path:` line from frontmatter (or set to empty
+   string). Leave `branch:` as-is for historical reference.
+   If the worktree was kept, leave `worktree_path:` as-is.
 5. If the project had a `skills:` list, change it to `skills: []`
    (the symlinks were handled in Step 2.5e; the cleared list records
    that this project no longer holds any skill references).
