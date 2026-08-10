@@ -50,16 +50,33 @@ Review the conversation history and identify:
 
 If nothing to update, say so and stop.
 
-## Step 4: Apply
+## Step 4: Dispatch to Background Agent
 
-Use the Edit tool for existing files. Use the Write tool for new detail
-files. Edit each file individually — do not rewrite entire files.
+Build a self-contained agent prompt from the updates identified in
+Step 3:
 
-Always set `last-active: <YYYY-MM-DD>` (today) in the frontmatter as
-the first edit to CLAUDE.md, before applying checklist or progress
-changes. This field drives the SessionStart ordering hook.
+> Update project documentation for project `<name>`.
+>
+> **Project directory:** `<absolute path to projects/<name>/>`
+>
+> Read `CLAUDE.md` in the project directory, then apply these updates:
+> - [specific checklist items to check off]
+> - [specific new items to add]
+> - [specific detail files to update, with the content to add]
+> - [new Reference Files table rows if any]
+>
+> Also update the `last-active` frontmatter field to today's date
+> (YYYY-MM-DD).
+>
+> Rules: only edit files under the project directory. Never change the
+> `status:` frontmatter field. Use the Edit tool for existing files,
+> Write tool for new files. Edit each file individually — do not rewrite
+> entire files.
 
-Summarize what was updated. If the session produced durable domain-level
-knowledge (not just project status), suggest `/workspace:update-domain` —
-this command never edits domain files itself.
+Dispatch using the Agent tool with `run_in_background: true`. Say
+"Updating project docs in the background." and return immediately.
+
+**On agent completion notification:** Briefly confirm what was updated
+(one line). If the session produced durable domain-level knowledge (not
+just project status), suggest `/workspace:update-domain`.
 
