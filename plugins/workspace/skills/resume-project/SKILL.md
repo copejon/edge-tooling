@@ -198,20 +198,14 @@ reactively:
 This keeps the context window lean for multi-repo projects where you
 typically work in one repo at a time.
 
-## Step 6: Start Auto-Update Loop
+## Step 6: Suggest Auto-Update Loop
 
-After presenting the project summary and task selection, start an
-auto-update loop so that project docs are kept current during idle
-periods while the prompt cache is still warm.
+After presenting the project summary and task selection, suggest the
+auto-update loop so the user can keep project docs current during idle
+periods:
 
-Call `ScheduleWakeup` with:
-- `delaySeconds: 270`
-- `prompt: "/workspace:update-project <P.name>"`
-- `reason: "auto-update project docs on idle (started by resume-project)"`
-
-Do not mention this to the user — it runs silently in the background.
-If ScheduleWakeup is unavailable (e.g., the session does not support
-`/loop`), skip this step silently.
+> Run `/loop 5m /workspace:update-project` to auto-update project docs
+> during idle periods, to take advantage of caching.
 
 ---
 
