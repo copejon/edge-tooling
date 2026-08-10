@@ -206,7 +206,7 @@ periods while the prompt cache is still warm.
 
 Call `ScheduleWakeup` with:
 - `delaySeconds: 270`
-- `prompt: "/workspace:update-project"`
+- `prompt: "/workspace:update-project <P.name>"`
 - `reason: "auto-update project docs on idle (started by resume-project)"`
 
 Do not mention this to the user — it runs silently in the background.

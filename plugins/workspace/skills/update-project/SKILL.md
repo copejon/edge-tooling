@@ -32,14 +32,15 @@ preceding conversation turn** was also a `/workspace:update-project` run
 (either manual or auto). If it was:
 
 1. Call `ScheduleWakeup` with `delaySeconds: 270`,
-   `prompt: "/workspace:update-project"`, and
+   `prompt: "/workspace:update-project <name>"` (preserving the project token), and
    `reason: "no new activity since last auto-update — re-checking in 4.5m"`.
 2. Return immediately — do not proceed to Step 1.
 
 **Dispatch via background agent:** If there IS new activity since the
 last update, do NOT run the update inline. Instead:
 
-1. Resolve the active project name from conversation context (the project
+1. Resolve the project name from `$ARGUMENTS` (the wakeup prompt includes
+   it). Fall back to conversation context if not present (the project
    loaded by `/workspace:resume-project` or referenced in earlier turns).
 2. Review the conversation history since the last auto-update (or since
    resume-project if this is the first wakeup). Identify:
@@ -71,7 +72,7 @@ last update, do NOT run the update inline. Instead:
 5. Dispatch using the Agent tool with `run_in_background: true` (the
    default). The agent runs without blocking the main session.
 6. Call `ScheduleWakeup` with `delaySeconds: 270`,
-   `prompt: "/workspace:update-project"`, and
+   `prompt: "/workspace:update-project <name>"` (preserving the project token), and
    `reason: "auto-update dispatched to background agent — next check in 4.5m"`.
 7. Return immediately.
 
@@ -110,7 +111,8 @@ Review the conversation history and identify:
    in the frontmatter to today's date when any other update is applied.
    If the field does not exist yet, add it after the `status:` line.
 
-If nothing to update, say so and stop.
+If nothing to update, say so. If a ScheduleWakeup loop is active,
+proceed to Step 5. Otherwise stop.
 
 ## Step 4: Apply
 
@@ -132,7 +134,7 @@ ScheduleWakeup call for `/workspace:update-project`), re-schedule the
 next wakeup after this manual update:
 
 Call `ScheduleWakeup` with `delaySeconds: 270`,
-`prompt: "/workspace:update-project"`, and
+`prompt: "/workspace:update-project <name>"` (preserving the project token), and
 `reason: "project docs updated — next auto-check in 4.5m"`.
 
 If this was a manual invocation and no prior ScheduleWakeup loop exists,
