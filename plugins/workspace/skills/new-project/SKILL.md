@@ -73,7 +73,7 @@ linking (the repo's `.claude/skills/` already is the workspace's). In
 step 1f, do not create PR worktrees — record any PR URL in
 `related_links:` only.
 
-**Instead of step 1e**, create an isolated worktree automatically:
+**Instead of step 1e**, create an isolated worktree automatically. If the project type is `ci-testing` or `analysis`, skip worktree creation (these types don't modify code by default). Omit `branch:` and `worktree_path:` from frontmatter.
 
 1. Derive the branch name using the same logic as multi-repo step 1e-2:
    - If JIRA was provided, extract the ticket ID and ask for a slug

@@ -160,6 +160,9 @@ and `P.worktree_status` is empty (self-repo project, not multi-repo).
    If "commit and push": help the user commit and push. For
    `no_upstream` branches: `git -C <worktree_path> push -u fork <branch>`.
 
+   If the worktree is clean (or the user chose to commit and push), proceed
+   to removal. If the user chose to keep the worktree, skip to step 5.
+
 3. If removing the worktree:
    - **If the session is currently in the worktree** (i.e., the user
      resumed the project via `/workspace:resume-project` in this
