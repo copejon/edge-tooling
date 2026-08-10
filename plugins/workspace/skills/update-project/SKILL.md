@@ -51,8 +51,13 @@ Review the conversation history and identify:
 If nothing to update, check CronList for any job whose prompt contains
 `update-project`. If one exists, cancel it with CronDelete and tell the
 user: "Nothing to update — auto-update stopped. Run
-`/workspace:auto-update` to re-enable." If no cron job exists (manual
-invocation), just say "Nothing to update." Either way, stop.
+`/workspace:auto-update` to re-enable.
+
+Cache is likely cold by now — consider `/clear` then
+`/workspace:resume-project` to start a fresh session at lower cost."
+
+If no cron job exists (manual invocation), just say "Nothing to update."
+Either way, stop.
 
 ## Step 4: Dispatch to Background Agent
 
