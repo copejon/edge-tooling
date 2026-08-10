@@ -15,4 +15,10 @@ user it's already running (show the job ID) and stop.
 
 ## Step 2: Schedule
 
-Invoke `/loop 5m /workspace:update-project` via the Skill tool.
+Call CronCreate directly with cron `*/5 * * * *`, prompt
+`/workspace:update-project`, recurring `true`. Confirm: scheduled every
+5 minutes, auto-expires after 7 days, cancel with CronDelete (show the
+job ID).
+
+Do NOT run `/workspace:update-project` immediately — the first fire
+should happen after 5 minutes, when the user has had time to work.
