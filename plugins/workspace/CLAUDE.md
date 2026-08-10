@@ -33,7 +33,7 @@ scripts/workspace_lib.py                          Shared, yaml-free: resolve_wor
 scripts/{resume,consolidate,recent}-project*.py   Project tooling
 scripts/domain-info.py                            Project→domain resolution, writability, copy-on-write
 scripts/skills.py                                 Repo-skill symlink manager (scan/link/verify/unlink-check)
-scripts/handoff.py                                Checkpoint marker: write (skill) / read (hook)
+scripts/handoff.py                                Handoff marker: write (skill) / read (hook)
 domains/{example,tnf,lvm-operator}/               Bundled domains (read-only)
 templates/{dev-env.yaml.template, dev-env-self.yaml.template, settings.local.json.tpl}
 tests/{test_setup.sh, test_skills.py, test_domain_info.py, test_handoff.py}  Test suites
@@ -46,7 +46,7 @@ tests/{test_setup.sh, test_skills.py, test_domain_info.py, test_handoff.py}  Tes
 | `/workspace:setup-environment` | Set up / refresh a workspace from a domain |
 | `/workspace:create-domain` | Build a custom workspace from arbitrary repos |
 | `/workspace:new-project` | Create a new project workspace for a task |
-| `/workspace:checkpoint` | Update project docs and arm a handoff for the next `/clear` |
+| `/workspace:handoff` | Update project docs and arm a handoff for the next `/clear` |
 | `/workspace:resume-project` | Resume an existing project |
 | `/workspace:close-project` | Close a completed project (worktree cleanup) |
 | `/workspace:update-project` | Update project docs from the session |
@@ -64,7 +64,7 @@ tests/{test_setup.sh, test_skills.py, test_domain_info.py, test_handoff.py}  Tes
 - **PyYAML**: plugins can't declare python deps. `resume-project.py` emits a
   self-describing JSON error when PyYAML is missing; `workspace_lib.py` and
   `recent-projects.py` stay yaml-free so the SessionStart hook never needs it.
-- **Checkpoint handoff**: `/workspace:checkpoint` writes a single-use marker
+- **Session handoff**: `/workspace:handoff` writes a single-use marker
   to `<workspace>/.claude/handoff.json`; the SessionStart hook on the `clear`
   matcher (`handoff.py read`) consumes it and tells Claude to resume that
   project, then falls through to `recent-projects.py` when no handoff is

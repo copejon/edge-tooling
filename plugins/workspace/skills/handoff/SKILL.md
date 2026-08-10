@@ -1,18 +1,18 @@
 ---
-name: checkpoint
+name: handoff
 description: Save session progress to the project docs and arm a handoff for the next /clear
 argument-hint: [name-or-number]
 disable-model-invocation: true
 ---
 
-# Checkpoint a Session
+# Hand Off a Session
 
 Record what this session accomplished, then arm a handoff so the next
 session — after you press `/clear` — resumes the project automatically.
 
 This is the command to run at a natural breaking point. It replaces the
 `/workspace:update-project` → `/clear` → `/workspace:resume-project`
-sequence with `/workspace:checkpoint` → `/clear`.
+sequence with `/workspace:handoff` → `/clear`.
 
 ## Step 1: Resolve Project
 
@@ -73,7 +73,7 @@ Parse the JSON output:
 
 Tell the user:
 
-> Checkpoint saved. Press `/clear` — the next session will resume
+> Handoff armed. Press `/clear` — the next session will resume
 > `<project>` at "<next task>" automatically.
 
 The handoff expires after 60 minutes and fires only once.

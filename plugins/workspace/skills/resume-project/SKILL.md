@@ -143,8 +143,8 @@ Add: "Domain docs available for deeper reference (architecture, debugging)."
 
 ## Step 4: Task Selection
 
-**If a checkpoint handoff was injected into this session** — the SessionStart
-context opened with "Checkpoint handoff pending" and named a project, a next
+**If a handoff was injected into this session** — the SessionStart
+context opened with "Handoff pending" and named a project, a next
 task, and detail files — then the task decision has already been made:
 
 - Skip **4a** and **4b** entirely. Do not present a menu.
