@@ -39,20 +39,40 @@ no path joining is needed.
 3. **Do NOT read `P.repo_context_files` or `P.domain_docs` yet.** Store
    both lists for on-demand loading (see Step 5).
 
-## Step 2.5: Enter Self-Repo Worktree
+## Step 2.5: Verify Self-Repo Worktree
 
 If `P.frontmatter.worktree_path` is present (self-repo project with
 worktree isolation):
 
-1. Call `EnterWorktree` with `path` set to
-   `P.frontmatter.worktree_path`.
-2. If `EnterWorktree` succeeds, note for Step 3: "Entered worktree at
-   `<worktree_path>` on branch `<P.frontmatter.branch>`."
-3. If `EnterWorktree` errors (path no longer exists), warn the user and
-   offer via AskUserQuestion:
-   - **"Recreate worktree"** — call `EnterWorktree` with `name` set to
-     `P.frontmatter.branch`. Update `worktree_path` in the project
-     CLAUDE.md frontmatter (Edit tool) with the new path.
+1. Verify the worktree exists on disk:
+
+   ```bash
+   test -d "<P.frontmatter.worktree_path>" && echo "exists" || echo "missing"
+   ```
+
+2. If the worktree exists, note for Step 3: "Worktree available at
+   `<worktree_path>` on branch `<P.frontmatter.branch>`. Use this
+   path for code changes."
+3. If the worktree is missing, warn the user and offer via
+   AskUserQuestion:
+   - **"Recreate worktree"** — recreate using git:
+
+     ```bash
+     git -C "$WS" worktree add \
+       .claude/worktrees/<branch> <P.frontmatter.branch>
+     ```
+
+     If the branch no longer exists locally, create it from origin:
+
+     ```bash
+     default_branch=$(git -C "$WS" symbolic-ref refs/remotes/origin/HEAD \
+       2>/dev/null | sed 's|refs/remotes/origin/||')
+     git -C "$WS" worktree add \
+       .claude/worktrees/<branch> -b <P.frontmatter.branch> origin/$default_branch
+     ```
+
+     Update `worktree_path` in the project CLAUDE.md frontmatter (Edit
+     tool) if the new path differs.
    - **"Continue without worktree"** — proceed without isolation; note
      in Step 3 summary that the worktree is missing.
 
@@ -111,8 +131,8 @@ Show the worktree status:
 
 > **Worktree:** `<worktree_path>` → branch `<branch>` (active)
 
-If Step 2.5 entered the worktree successfully, add: "Session is in the
-worktree — code changes apply to branch `<branch>`."
+If Step 2.5 confirmed the worktree exists, add: "Use this worktree
+path for code changes on branch `<branch>`."
 
 If the worktree was missing and recreated, note: "Worktree was missing
 and has been recreated at `<new-path>`."

@@ -81,22 +81,42 @@ step 1f, do not create PR worktrees — record any PR URL in
    - For `bug` type, prefix with `fix/`
    - Confirm the final branch name with the user
 
-2. Call `EnterWorktree` with `name` set to the branch name (no
-   confirmation prompt — worktree isolation is the default).
+2. Create the worktree using git:
 
-3. Record the worktree path returned by `EnterWorktree` for the
-   frontmatter (Step 3b): `branch: <branch-name>` and
-   `worktree_path: <absolute-path-returned-by-EnterWorktree>`.
+   ```bash
+   # Ensure .claude/worktrees/ is excluded from git tracking
+   grep -qF '.claude/worktrees' "$WS/.git/info/exclude" 2>/dev/null \
+     || echo '.claude/worktrees/' >> "$WS/.git/info/exclude"
 
-4. If `EnterWorktree` fails (sandbox denial, permissions), warn the
-   user and fall back to edit-in-place: omit `branch:` and
-   `worktree_path:` from frontmatter, and note in the Step 4 summary
-   that isolation was not possible.
+   # Determine the default branch
+   default_branch=$(git -C "$WS" symbolic-ref refs/remotes/origin/HEAD \
+     2>/dev/null | sed 's|refs/remotes/origin/||')
+   if [ -z "$default_branch" ]; then
+     for candidate in main master; do
+       if git -C "$WS" rev-parse --verify "origin/$candidate" \
+         >/dev/null 2>&1; then
+         default_branch="$candidate"; break
+       fi
+     done
+   fi
+
+   # Create the worktree
+   git -C "$WS" worktree add \
+     .claude/worktrees/<branch> -b <branch> origin/$default_branch
+   ```
+
+3. Record the worktree path for the frontmatter (Step 3b):
+   `branch: <branch-name>` and
+   `worktree_path: $WS/.claude/worktrees/<branch>`.
+
+4. If `git worktree add` fails, warn the user and fall back to
+   edit-in-place: omit `branch:` and `worktree_path:` from frontmatter,
+   and note in the Step 4 summary that isolation was not possible.
 
 The project frontmatter uses `repos: []` and omits `worktrees:` and
 `skills:`. If the user explicitly requests no worktree (e.g., "no
-worktree" in the task description), skip the `EnterWorktree` call and
-omit `branch:` and `worktree_path:`.
+worktree" in the task description), skip worktree creation and omit
+`branch:` and `worktree_path:`.
 
 Ask which repos from this workspace are relevant. **Dynamically load
 the repo list** from `$WS/dev-env.yaml`:
@@ -346,7 +366,7 @@ After creating the project, provide a summary:
     > Code changes happen in this worktree. The main checkout stays
     > on its current branch for reference.
 
-    If no worktree was created (user opted out or EnterWorktree failed):
+    If no worktree was created (user opted out or creation failed):
     remind that code changes happen directly in this checkout — suggest
     creating a git branch named after the project folder before starting.
 
@@ -404,10 +424,10 @@ worktrees:
 # worktrees: subset of repos that have active worktrees (from Step 1e)
 # branch: the branch name used for all worktrees
 # Omit both if no worktrees were created (ci-testing, analysis non-PR)
-worktree_path: <absolute path to EnterWorktree worktree>
+worktree_path: <absolute path to .claude/worktrees/<branch>>
 # worktree_path: for single-repo self-workspaces only (from Step 1e
-# self-repo flow). The absolute path returned by EnterWorktree.
-# Omit if no worktree was created (user opted out or EnterWorktree failed)
+# self-repo flow). The absolute path from git worktree add.
+# Omit if no worktree was created (user opted out or creation failed)
 # Mutually exclusive with worktrees: (multi-repo uses worktrees:,
 # self-repo uses worktree_path:)
 skills:

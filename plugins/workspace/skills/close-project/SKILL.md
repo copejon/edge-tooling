@@ -163,27 +163,19 @@ and `P.worktree_status` is empty (self-repo project, not multi-repo).
    If the worktree is clean (or the user chose to commit and push), proceed
    to removal. If the user chose to keep the worktree, skip to step 5.
 
-3. If removing the worktree:
-   - **If the session is currently in the worktree** (i.e., the user
-     resumed the project via `/workspace:resume-project` in this
-     session, which called `EnterWorktree(path)`): call `ExitWorktree`
-     with `action: "remove"`. If the worktree has uncommitted changes
-     and the user chose "Discard", set `discard_changes: true`.
-   - **If the session is NOT in the worktree** (user is closing without
-     having resumed first): `ExitWorktree` is a no-op in this case.
-     Fall back to git:
+3. Remove the worktree using git:
 
-     ```bash
-     # Clean worktree:
-     git worktree remove <P.frontmatter.worktree_path>
-     # Dirty worktree (user chose "Discard"):
-     git worktree remove --force <P.frontmatter.worktree_path>
-     ```
+   ```bash
+   # Clean worktree:
+   git worktree remove <P.frontmatter.worktree_path>
+   # Dirty worktree (user chose "Discard"):
+   git worktree remove --force <P.frontmatter.worktree_path>
+   ```
 
-     Then delete the local branch:
-     ```bash
-     git branch -d <P.frontmatter.branch>
-     ```
+   Then delete the local branch:
+   ```bash
+   git branch -d <P.frontmatter.branch>
+   ```
 
 4. If the worktree path does not exist on disk (already removed
    externally), skip removal silently.
