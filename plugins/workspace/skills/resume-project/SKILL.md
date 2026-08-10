@@ -204,8 +204,8 @@ After presenting the project summary and task selection, suggest the
 auto-update loop so the user can keep project docs current during idle
 periods:
 
-> Run `/loop 5m /workspace:update-project` to auto-update project docs
-> during idle periods, to take advantage of caching.
+> Run `/workspace:auto-update` to keep project docs updated during idle
+> periods.
 
 ---
 
