@@ -101,11 +101,11 @@ def collect_projects(projects_dir: Path) -> list[dict]:
             "name": d.name,
             "type": fm.get("type", "—"),
             "status": fm.get("status", "—"),
-            "mtime": sort_ts,
+            "sort_ts": sort_ts,
             "date_str": date_str,
         })
 
-    entries.sort(key=lambda e: e["mtime"], reverse=True)
+    entries.sort(key=lambda e: e["sort_ts"], reverse=True)
     return entries
 
 

@@ -154,7 +154,7 @@ class TestReadFresh(HandoffFixture):
         hook_out = out["hookSpecificOutput"]
         self.assertEqual(hook_out["hookEventName"], "SessionStart")
         ctx = hook_out["additionalContext"]
-        self.assertIn("Checkpoint handoff pending", ctx)
+        self.assertIn("Handoff pending", ctx)
         self.assertIn("demo", ctx)
         self.assertIn("reproduce with restic disabled", ctx)
         self.assertIn("investigation.md", ctx)
@@ -172,13 +172,13 @@ class TestReadFresh(HandoffFixture):
         self.write_marker(project="demo")
         run_handoff(self.ws, "read")
         second = run_handoff(self.ws, "read").stdout
-        self.assertNotIn("Checkpoint handoff pending", second)
+        self.assertNotIn("Handoff pending", second)
 
     def test_future_timestamp_is_treated_as_fresh(self):
         self.make_project("demo")
         self.write_marker(project="demo", written_at=iso(5))
         out = run_handoff(self.ws, "read").stdout
-        self.assertIn("Checkpoint handoff pending", out)
+        self.assertIn("Handoff pending", out)
 
     def test_empty_load_files_renders_placeholder(self):
         self.make_project("demo")
@@ -211,7 +211,7 @@ class TestReadDegradation(HandoffFixture):
         self.make_project("demo")
         self.write_marker(project="demo", written_at=iso(-61))
         got = run_handoff(self.ws, "read").stdout
-        self.assertNotIn("Checkpoint handoff pending", got)
+        self.assertNotIn("Handoff pending", got)
         self.assertEqual(got, run_recent(self.ws).stdout)
         self.assertFalse(self.marker().exists())
 
@@ -228,14 +228,14 @@ class TestReadDegradation(HandoffFixture):
         self.make_project("demo")
         self.write_marker(project="demo", version=99)
         got = run_handoff(self.ws, "read").stdout
-        self.assertNotIn("Checkpoint handoff pending", got)
+        self.assertNotIn("Handoff pending", got)
         self.assertFalse(self.marker().exists())
 
     def test_missing_next_task_passes_through(self):
         self.make_project("demo")
         self.write_marker(project="demo", next_task="")
         got = run_handoff(self.ws, "read").stdout
-        self.assertNotIn("Checkpoint handoff pending", got)
+        self.assertNotIn("Handoff pending", got)
         self.assertFalse(self.marker().exists())
 
     def test_no_projects_dir_is_silent(self):
@@ -253,6 +253,46 @@ class TestReadDegradation(HandoffFixture):
         )
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "")
+
+
+class TestClear(HandoffFixture):
+
+    def test_clear_deletes_existing_marker(self):
+        self.make_project("demo")
+        self.write_marker(project="demo")
+        out = json.loads(run_handoff(self.ws, "clear").stdout)
+        self.assertEqual(out["status"], "ok")
+        self.assertTrue(out["deleted"])
+        self.assertFalse(self.marker().exists())
+
+    def test_clear_no_marker_is_noop(self):
+        out = json.loads(run_handoff(self.ws, "clear").stdout)
+        self.assertEqual(out["status"], "ok")
+        self.assertFalse(out["deleted"])
+
+    def test_clear_with_matching_project(self):
+        self.make_project("demo")
+        self.write_marker(project="demo")
+        out = json.loads(run_handoff(
+            self.ws, "clear", "--project", "demo").stdout)
+        self.assertTrue(out["deleted"])
+        self.assertFalse(self.marker().exists())
+
+    def test_clear_with_nonmatching_project_preserves_marker(self):
+        self.make_project("demo")
+        self.make_project("other")
+        self.write_marker(project="other")
+        out = json.loads(run_handoff(
+            self.ws, "clear", "--project", "demo").stdout)
+        self.assertFalse(out["deleted"])
+        self.assertTrue(self.marker().exists())
+
+    def test_clear_stale_marker_still_deleted(self):
+        self.make_project("demo")
+        self.write_marker(project="demo", written_at=iso(-120))
+        out = json.loads(run_handoff(self.ws, "clear").stdout)
+        self.assertTrue(out["deleted"])
+        self.assertFalse(self.marker().exists())
 
 
 if __name__ == "__main__":

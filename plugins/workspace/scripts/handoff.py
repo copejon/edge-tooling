@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Arm and consume the checkpoint handoff marker.
+"""Arm and consume the session handoff marker.
 
-`/workspace:checkpoint` writes a marker after updating a project's docs; the
+`/workspace:handoff` writes a marker after updating a project's docs; the
 SessionStart hook bound to the `clear` matcher consumes it and tells Claude to
 resume that project. The marker is the only state that crosses a /clear.
 
@@ -127,7 +127,7 @@ def humanize_age(seconds: float) -> str:
 def build_directive(marker: dict) -> str:
     files = ", ".join(marker["load_files"]) or "none recorded"
     return (
-        f"Checkpoint handoff pending (saved {humanize_age(marker['_age_seconds'])}).\n\n"
+        f"Handoff pending (saved {humanize_age(marker['_age_seconds'])}).\n\n"
         f"Project: {marker['project']}\n"
         f"Next task: {marker['next_task']}\n"
         f"Detail files: {files}\n\n"
@@ -190,7 +190,7 @@ def cmd_read(args: argparse.Namespace) -> int:
 
     emit({
         "systemMessage": (
-            f"Resuming {marker['project']} from checkpoint "
+            f"Resuming {marker['project']} from handoff "
             f"({humanize_age(marker['_age_seconds'])})."
         ),
         "hookSpecificOutput": {
@@ -198,6 +198,33 @@ def cmd_read(args: argparse.Namespace) -> int:
             "additionalContext": build_directive(marker),
         },
     })
+    return 0
+
+
+def cmd_clear(args: argparse.Namespace) -> int:
+    root = workspace_lib.resolve_workspace_root()
+    if root is None:
+        emit({"status": "ok", "deleted": False})
+        return 0
+
+    path = marker_path(root)
+    if not path.is_file():
+        emit({"status": "ok", "deleted": False})
+        return 0
+
+    if args.project:
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError):
+            unlink_quietly(path)
+            emit({"status": "ok", "deleted": True})
+            return 0
+        if data.get("project") != args.project:
+            emit({"status": "ok", "deleted": False})
+            return 0
+
+    unlink_quietly(path)
+    emit({"status": "ok", "deleted": True})
     return 0
 
 
@@ -213,6 +240,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("read", help="Consume a handoff at session start (hook mode)")
 
+    clear = sub.add_parser("clear", help="Remove the handoff marker")
+    clear.add_argument("--project", default="",
+                       help="Only clear if marker belongs to this project")
+
     return parser
 
 
@@ -220,6 +251,8 @@ def main() -> int:
     args = build_parser().parse_args()
     if args.command == "write":
         return cmd_write(args)
+    if args.command == "clear":
+        return cmd_clear(args)
     if args.command == "read":
         try:
             return cmd_read(args)

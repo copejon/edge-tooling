@@ -61,7 +61,7 @@ If no notes were provided in the arguments, ask the user:
 
 Substeps 2.5a-2.5d apply if `P.worktree_status` (from Step 1's
 resume-project.py output) is non-empty; substep 2.5e applies if
-`P.frontmatter.skills` is non-empty. If neither, skip to Step 3.
+`P.frontmatter.skills` is non-empty. Substep 2.5f always runs.
 
 **2.5a. Display worktree status**
 
@@ -164,6 +164,19 @@ Skills are unlinked even when the user chose to keep worktrees in 2.5b —
 symlinks surface autocomplete entries and have nothing to do with
 branches. The `skills:` frontmatter is cleared in Step 3b regardless of
 what was removable.
+
+**2.5f. Clean up handoff marker**
+
+If a checkpoint was armed for this project, remove it so a subsequent
+`/clear` doesn't attempt to resume a closed project:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" clear \
+  --project "<P.name>"
+```
+
+No output handling needed — the marker is silently removed only if it
+references this project.
 
 ## Step 3: Update Project CLAUDE.md
 
