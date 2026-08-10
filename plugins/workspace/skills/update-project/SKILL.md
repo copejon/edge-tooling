@@ -48,8 +48,11 @@ Review the conversation history and identify:
    in the frontmatter to today's date when any other update is applied.
    If the field does not exist yet, add it after the `status:` line.
 
-If nothing to update, stop silently — produce no output at all. This
-keeps `/loop` invocations quiet when the session has been idle.
+If nothing to update, check CronList for any job whose prompt contains
+`update-project`. If one exists, cancel it with CronDelete and tell the
+user: "Nothing to update — auto-update stopped. Run
+`/workspace:auto-update` to re-enable." If no cron job exists (manual
+invocation), just say "Nothing to update." Either way, stop.
 
 ## Step 4: Dispatch to Background Agent
 
