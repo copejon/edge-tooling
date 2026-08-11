@@ -190,8 +190,9 @@ def cmd_read(args: argparse.Namespace) -> int:
 
     emit({
         "systemMessage": (
-            f"Resuming {marker['project']} from handoff "
-            f"({humanize_age(marker['_age_seconds'])})."
+            f"Detected saved handoff for {marker['project']} "
+            f"({humanize_age(marker['_age_seconds'])}). "
+            f"Send any message to resume work."
         ),
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
