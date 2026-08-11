@@ -226,8 +226,8 @@ class TestResumeStampsLastActive(RecentProjectsFixture):
         today = datetime.date.today().isoformat()
         self.assertIn(f"last-active: {today}", text)
         lines = text.splitlines()
-        status_idx = next(i for i, l in enumerate(lines) if l.startswith("status:"))
-        la_idx = next(i for i, l in enumerate(lines) if l.startswith("last-active:"))
+        status_idx = next(i for i, line in enumerate(lines) if line.startswith("status:"))
+        la_idx = next(i for i, line in enumerate(lines) if line.startswith("last-active:"))
         self.assertEqual(la_idx, status_idx + 1)
 
 

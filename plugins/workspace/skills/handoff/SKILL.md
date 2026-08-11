@@ -1,7 +1,7 @@
 ---
 name: handoff
 description: Save session progress to the project docs and arm a handoff for the next /clear
-argument-hint: [name-or-number]
+argument-hint: [name]
 disable-model-invocation: true
 ---
 
