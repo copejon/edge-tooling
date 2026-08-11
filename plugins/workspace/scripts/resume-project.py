@@ -93,6 +93,44 @@ def parse_frontmatter(path: Path) -> dict[str, Any]:
     return result
 
 
+def stamp_last_active(claude_md: Path) -> None:
+    """Update or insert last-active in CLAUDE.md frontmatter to today's date."""
+    try:
+        text = claude_md.read_text()
+    except OSError:
+        return
+
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return
+
+    today = datetime.date.today().isoformat()
+    found = False
+    end = len(lines)
+
+    for i, line in enumerate(lines[1:], 1):
+        if line.strip() == "---":
+            end = i
+            break
+        if line.startswith("last-active:"):
+            lines[i] = f"last-active: {today}\n"
+            found = True
+            break
+
+    if not found:
+        insert_at = end
+        for i, line in enumerate(lines[1:end], 1):
+            if line.startswith("status:"):
+                insert_at = i + 1
+                break
+        lines.insert(insert_at, f"last-active: {today}\n")
+
+    try:
+        claude_md.write_text("".join(lines))
+    except OSError:
+        pass
+
+
 def normalize_worktrees(raw: Any, fallback_branch: str) -> list[dict[str, str]]:
     """Normalize any worktree frontmatter format to list[dict] with repo, branch, path."""
     if not raw:
@@ -458,6 +496,9 @@ def resolve_project(arg: str | None, root: Path) -> dict:
     worktrees = normalize_worktrees(fm.get("worktrees", []), branch)
     worktree_repos = [wt["repo"] for wt in worktrees]
     worktree_status = resolve_worktree_status(worktrees, root)
+
+    if claude_md.is_file():
+        stamp_last_active(claude_md)
 
     return {
         "status": "ok",

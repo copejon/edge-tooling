@@ -61,7 +61,7 @@ If no notes were provided in the arguments, ask the user:
 
 Substeps 2.5a-2.5d apply if `P.worktree_status` (from Step 1's
 resume-project.py output) is non-empty; substep 2.5e applies if
-`P.frontmatter.skills` is non-empty. If neither, skip to Step 3.
+`P.frontmatter.skills` is non-empty. Substep 2.5f always runs.
 
 **2.5a. Display worktree status**
 
@@ -165,6 +165,19 @@ symlinks surface autocomplete entries and have nothing to do with
 branches. The `skills:` frontmatter is cleared in Step 3b regardless of
 what was removable.
 
+**2.5f. Clean up handoff marker**
+
+If a checkpoint was armed for this project, remove it so a subsequent
+`/clear` doesn't attempt to resume a closed project:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" clear \
+  --project "<P.name>"
+```
+
+No output handling needed — the marker is silently removed only if it
+references this project.
+
 ## Step 3: Update Project CLAUDE.md
 
 **3a. Read the current CLAUDE.md**
@@ -179,10 +192,12 @@ Using the Edit tool, update the YAML frontmatter:
    `status: done`
 2. Add a `closed: <YYYY-MM-DD>` field (today's date) after the
    `status` line. If a `closed:` field already exists, update it.
-3. If worktrees were removed in Step 2.5, change the `worktrees:`
+3. Update `last-active: <YYYY-MM-DD>` to today's date (or add it after
+   `closed:` if it doesn't exist).
+4. If worktrees were removed in Step 2.5, change the `worktrees:`
    list to `worktrees: []`. Leave `branch:` as-is for historical
    reference.
-4. If the project had a `skills:` list, change it to `skills: []`
+5. If the project had a `skills:` list, change it to `skills: []`
    (the symlinks were handled in Step 2.5e; the cleared list records
    that this project no longer holds any skill references).
 
