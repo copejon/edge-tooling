@@ -411,7 +411,7 @@ Valid `status` values: `active`, `blocked`, `done` (set only by `/workspace:clos
 project: <folder-name>
 type: <bug|feature|ci-testing|docs|analysis>
 created: <YYYY-MM-DD>
-last-active: <YYYY-MM-DD>
+last-active: <YYYY-MM-DDTHH:MM>
 status: active
 jira: <URL or "none">
 domain: <domain name from dev-env.yaml, or omit if none>

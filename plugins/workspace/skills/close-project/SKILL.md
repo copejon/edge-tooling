@@ -241,7 +241,7 @@ Using the Edit tool, update the YAML frontmatter:
    `status: done`
 2. Add a `closed: <YYYY-MM-DD>` field (today's date) after the
    `status` line. If a `closed:` field already exists, update it.
-3. Update `last-active: <YYYY-MM-DD>` to today's date (or add it after
+3. Update `last-active: <YYYY-MM-DDTHH:MM>` to the current time (or add it after
    `closed:` if it doesn't exist).
 4. If worktrees were removed in Step 2.5, change the `worktrees:`
    list to `worktrees: []`. Leave `branch:` as-is for historical

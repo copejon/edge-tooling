@@ -172,20 +172,29 @@ class TestLastActiveDateDisplay(RecentProjectsFixture):
     """When last-active is present, LAST ACTIVE column shows the date, not mtime."""
 
     def test_date_column_shows_frontmatter_date(self):
-        write_project(self.projects, "my-proj", last_active="2026-07-15")
+        write_project(self.projects, "my-proj", last_active="2026-07-15T09:30")
         # Force mtime to a different date
         os.utime(self.projects / "my-proj" / "CLAUDE.md", (1700000000, 1700000000))
 
         result = run_hook(self.ws)
         self.assertIsNotNone(result)
-        self.assertIn("Jul 15", result["systemMessage"])
+        self.assertIn("Jul 15 09:30", result["systemMessage"])
+
+    def test_date_column_legacy_date_only(self):
+        """Legacy YYYY-MM-DD values still parse and display correctly."""
+        write_project(self.projects, "old-proj", last_active="2026-07-15")
+        os.utime(self.projects / "old-proj" / "CLAUDE.md", (1700000000, 1700000000))
+
+        result = run_hook(self.ws)
+        self.assertIsNotNone(result)
+        self.assertIn("Jul 15 23:59", result["systemMessage"])
 
 
 class TestResumeStampsLastActive(RecentProjectsFixture):
     """resume-project.py should update last-active on successful resolve."""
 
     def test_resolve_stamps_last_active(self):
-        """Successful resolve updates last-active to today."""
+        """Successful resolve updates last-active to current date+time."""
         d = self.projects / "my-proj"
         d.mkdir()
         (d / "CLAUDE.md").write_text(
@@ -205,7 +214,7 @@ class TestResumeStampsLastActive(RecentProjectsFixture):
 
         text = (d / "CLAUDE.md").read_text()
         today = datetime.date.today().isoformat()
-        self.assertIn(f"last-active: {today}", text)
+        self.assertIn(f"last-active: {today}T", text)
 
     def test_resolve_inserts_last_active_when_absent(self):
         """If no last-active field exists, insert it after status."""
@@ -224,7 +233,7 @@ class TestResumeStampsLastActive(RecentProjectsFixture):
 
         text = (d / "CLAUDE.md").read_text()
         today = datetime.date.today().isoformat()
-        self.assertIn(f"last-active: {today}", text)
+        self.assertIn(f"last-active: {today}T", text)
         lines = text.splitlines()
         status_idx = next(i for i, line in enumerate(lines) if line.startswith("status:"))
         la_idx = next(i for i, line in enumerate(lines) if line.startswith("last-active:"))
