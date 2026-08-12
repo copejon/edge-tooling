@@ -198,6 +198,15 @@ reactively:
 This keeps the context window lean for multi-repo projects where you
 typically work in one repo at a time.
 
+## Step 6: Suggest Auto-Update Loop
+
+After presenting the project summary and task selection, suggest the
+auto-update loop so the user can keep project docs current during idle
+periods:
+
+> Run `/workspace:auto-update` to keep project docs updated during idle
+> periods.
+
 ---
 
 ## Notes

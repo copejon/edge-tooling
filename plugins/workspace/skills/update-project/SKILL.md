@@ -48,17 +48,56 @@ Review the conversation history and identify:
    in the frontmatter to today's date when any other update is applied.
    If the field does not exist yet, add it after the `status:` line.
 
-If nothing to update, say so and stop.
+If nothing to update, check CronList for any job whose prompt contains
+`update-project`. If one exists, cancel it with CronDelete. If CronDelete
+succeeds, tell the user:
 
-## Step 4: Apply
+> Nothing to update — auto-update stopped. Run
+> `/workspace:auto-update` to re-enable.
+>
+> Cache is likely cold by now — consider `/clear` then
+> `/workspace:resume-project` to start a fresh session at lower cost.
 
-Use the Edit tool for existing files. Use the Write tool for new detail
-files. Edit each file individually — do not rewrite entire files.
+If CronDelete fails, warn: "Tried to stop auto-update but CronDelete
+failed — the loop may still be running. Use CronList to check."
 
-Always set `last-active: <YYYY-MM-DD>` (today) in the frontmatter as
-the first edit to CLAUDE.md, before applying checklist or progress
-changes. This field drives the SessionStart ordering hook.
+If no cron job exists (manual invocation), just say "Nothing to update."
+Either way, stop.
 
-Summarize what was updated. If the session produced durable domain-level
-knowledge (not just project status), suggest `/workspace:update-domain` —
-this command never edits domain files itself.
+## Step 4: Dispatch to Background Agent
+
+Build a self-contained agent prompt from the updates identified in
+Step 3:
+
+> Update project documentation for project `<name>`.
+>
+> **Project directory:** `<absolute path to projects/<name>/>`
+>
+> Read `CLAUDE.md` in the project directory, then apply these updates:
+> - [specific checklist items to check off]
+> - [specific new items to add]
+> - [specific detail files to update, with the content to add]
+> - [new Reference Files table rows if any]
+> - [progress entries to append under the Progress section]
+>
+> Also update the `last-active` frontmatter field to today's date
+> (YYYY-MM-DD) — this drives SessionStart project ordering.
+>
+> Rules: only edit files under the project directory. Never change the
+> `status:` frontmatter field. Use the Edit tool for existing files,
+> Write tool for new files. Edit each file individually — do not rewrite
+> entire files.
+
+Dispatch using the Agent tool with `run_in_background: true`. Say
+"Updating project docs in the background." and return immediately.
+
+**On agent completion notification:** Check the agent's result. If it
+succeeded, briefly confirm what was updated (one line). If the session
+produced durable domain-level knowledge (not just project status),
+suggest `/workspace:update-domain`.
+
+**On agent failure:** Tell the user: "Background update failed:
+[error summary]. Run `/workspace:update-project` manually to retry."
+Do NOT cancel the cron on agent failure — the next invocation may
+succeed if the failure was transient.
+
