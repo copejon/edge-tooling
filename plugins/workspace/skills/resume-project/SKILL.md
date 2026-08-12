@@ -127,7 +127,13 @@ Add: "When working on code changes, use the worktree paths above
 instead of the main checkout."
 
 **If `P.frontmatter.worktree_path` is present (self-repo worktree):**
-Show the worktree status:
+Show the worktree status only if Step 2.5 confirmed the worktree is
+available (either it already existed or was successfully recreated).
+If the user chose "Continue without worktree" in Step 2.5, skip this
+block and note: "Proceeding without worktree — code changes will
+happen in the main checkout."
+
+When displaying an available worktree:
 
 > **Worktree:** `<worktree_path>` → branch `<branch>` (active)
 
@@ -135,7 +141,8 @@ If Step 2.5 confirmed the worktree exists, add: "Use this worktree
 path for code changes on branch `<branch>`."
 
 If the worktree was missing and recreated, note: "Worktree was missing
-and has been recreated at `<new-path>`."
+and has been recreated at `<new-path>`." Use the new path (not the
+original frontmatter value) for the display.
 
 **If `P.frontmatter.skills` is non-empty:**
 Verify the project's linked skills:

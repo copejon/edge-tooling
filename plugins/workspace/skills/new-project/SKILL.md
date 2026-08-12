@@ -100,6 +100,11 @@ step 1f, do not create PR worktrees — record any PR URL in
      done
    fi
 
+   if [ -z "$default_branch" ]; then
+     echo "Cannot determine default branch from origin" >&2
+     exit 1
+   fi
+
    # Create the worktree
    git -C "$WS" worktree add \
      .claude/worktrees/<branch> -b <branch> origin/$default_branch

@@ -178,7 +178,8 @@ and `P.worktree_status` is empty (self-repo project, not multi-repo).
    ```
 
 4. If the worktree path does not exist on disk (already removed
-   externally), skip removal silently.
+   externally), skip removal silently but treat it as removed for
+   frontmatter purposes (clear `worktree_path` in Step 3b).
 
 5. If the user chose to keep the worktree, leave it in place and add a
    note to the closing summary: "Worktree preserved at
@@ -246,9 +247,10 @@ Using the Edit tool, update the YAML frontmatter:
 4. If worktrees were removed in Step 2.5, change the `worktrees:`
    list to `worktrees: []`. Leave `branch:` as-is for historical
    reference.
-   For self-repo projects: if the worktree was removed in Step 2.5s,
-   remove the `worktree_path:` line from frontmatter (or set to empty
-   string). Leave `branch:` as-is for historical reference.
+   For self-repo projects: if the worktree was removed (or already
+   absent) in Step 2.5s, remove the `worktree_path:` line from
+   frontmatter (or set to empty string). Leave `branch:` as-is for
+   historical reference.
    If the worktree was kept, leave `worktree_path:` as-is.
 5. If the project had a `skills:` list, change it to `skills: []`
    (the symlinks were handled in Step 2.5e; the cleared list records
