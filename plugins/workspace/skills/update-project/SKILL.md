@@ -49,12 +49,17 @@ Review the conversation history and identify:
    If the field does not exist yet, add it after the `status:` line.
 
 If nothing to update, check CronList for any job whose prompt contains
-`update-project`. If one exists, cancel it with CronDelete and tell the
-user: "Nothing to update — auto-update stopped. Run
-`/workspace:auto-update` to re-enable.
+`update-project`. If one exists, cancel it with CronDelete. If CronDelete
+succeeds, tell the user:
 
-Cache is likely cold by now — consider `/clear` then
-`/workspace:resume-project` to start a fresh session at lower cost."
+> Nothing to update — auto-update stopped. Run
+> `/workspace:auto-update` to re-enable.
+>
+> Cache is likely cold by now — consider `/clear` then
+> `/workspace:resume-project` to start a fresh session at lower cost.
+
+If CronDelete fails, warn: "Tried to stop auto-update but CronDelete
+failed — the loop may still be running. Use CronList to check."
 
 If no cron job exists (manual invocation), just say "Nothing to update."
 Either way, stop.
@@ -73,9 +78,10 @@ Step 3:
 > - [specific new items to add]
 > - [specific detail files to update, with the content to add]
 > - [new Reference Files table rows if any]
+> - [progress entries to append under the Progress section]
 >
 > Also update the `last-active` frontmatter field to today's date
-> (YYYY-MM-DD).
+> (YYYY-MM-DD) — this drives SessionStart project ordering.
 >
 > Rules: only edit files under the project directory. Never change the
 > `status:` frontmatter field. Use the Edit tool for existing files,
@@ -85,7 +91,13 @@ Step 3:
 Dispatch using the Agent tool with `run_in_background: true`. Say
 "Updating project docs in the background." and return immediately.
 
-**On agent completion notification:** Briefly confirm what was updated
-(one line). If the session produced durable domain-level knowledge (not
-just project status), suggest `/workspace:update-domain`.
+**On agent completion notification:** Check the agent's result. If it
+succeeded, briefly confirm what was updated (one line). If the session
+produced durable domain-level knowledge (not just project status),
+suggest `/workspace:update-domain`.
+
+**On agent failure:** Tell the user: "Background update failed:
+[error summary]. Run `/workspace:update-project` manually to retry."
+Do NOT cancel the cron on agent failure — the next invocation may
+succeed if the failure was transient.
 
