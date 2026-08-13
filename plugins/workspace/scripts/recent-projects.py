@@ -66,18 +66,12 @@ def _parse_last_active(value: str) -> float | None:
     """Parse a last-active value (YYYY-MM-DDTHH:MM or YYYY-MM-DD) into a timestamp."""
     try:
         if "T" in value:
-            date_part, time_part = value.split("T", 1)
-            time_fields = time_part.split(":")
-            h, m = int(time_fields[0]), int(time_fields[1]) if len(time_fields) > 1 else 0
+            dt = datetime.strptime(value, "%Y-%m-%dT%H:%M")
         else:
-            date_part = value
-            h, m = 23, 59
-        parts = date_part.split("-")
-        if len(parts) != 3:
-            return None
-        y, mo, d = int(parts[0]), int(parts[1]), int(parts[2])
-        return datetime(y, mo, d, h, m, 59).timestamp()
-    except (ValueError, OverflowError, IndexError):
+            dt = datetime.strptime(value, "%Y-%m-%d")
+            dt = dt.replace(hour=23, minute=59, second=59)
+        return dt.timestamp()
+    except (ValueError, OverflowError):
         return None
 
 
