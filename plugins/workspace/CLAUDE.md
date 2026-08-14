@@ -25,7 +25,7 @@ Two roots are kept strictly separate:
 
 ```text
 .claude-plugin/{plugin.json, marketplace.json}   Plugin + marketplace manifests
-skills/<name>/SKILL.md                            9 skills (workspace: prefix)
+skills/<name>/SKILL.md                            10 skills (workspace: prefix)
 skills/create-domain/context-template.md          Context-file template
 hooks/hooks.json                                  SessionStart → recent-projects.py / handoff.py
 scripts/setup.sh                                  Clone/update/init CLI (self-derives plugin root)
@@ -43,15 +43,16 @@ tests/{test_setup.sh, test_skills.py, test_domain_info.py, test_handoff.py}  Tes
 
 | Skill | Description |
 |-------|-------------|
-| `/workspace:setup-environment` | Set up / refresh a workspace from a domain |
-| `/workspace:create-domain` | Build a custom workspace from arbitrary repos |
+| `/workspace:setup-environment` | Set up or refresh a workspace — multi-repo from a domain, or single-repo self-workspace |
+| `/workspace:create-domain` | Build a custom multi-repo workspace from arbitrary repos |
 | `/workspace:new-project` | Create a new project workspace for a task |
-| `/workspace:handoff` | Update project docs and arm a handoff for the next `/clear` |
-| `/workspace:resume-project` | Resume an existing project |
-| `/workspace:close-project` | Close a completed project (worktree cleanup) |
-| `/workspace:update-project` | Update project docs from the session |
-| `/workspace:consolidate-project` | Archive completed checklist items |
+| `/workspace:handoff` | Save session progress to project docs and arm a handoff for the next `/clear` |
+| `/workspace:resume-project` | Resume an existing project workspace — reload context and continue |
+| `/workspace:close-project` | Close a project workspace, mark it done, and clean up worktrees |
+| `/workspace:update-project` | Update project documentation from this session |
+| `/workspace:consolidate-project` | Consolidate a bloated project CLAUDE.md by archiving completed items |
 | `/workspace:update-domain` | Feed lessons learned from a project back into its domain |
+| `/workspace:auto-update` | Start a 5-minute loop that keeps project docs updated during idle |
 
 ## Key Conventions
 
