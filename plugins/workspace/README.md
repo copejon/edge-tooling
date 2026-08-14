@@ -40,20 +40,61 @@ files, and generates the workspace's root `CLAUDE.md`. Either way, launch
 To build a multi-repo workspace from an arbitrary set of repos instead of a
 bundled domain, use `/workspace:create-domain`.
 
+## Way of Working
+
+A workspace is a long-lived directory. Projects inside it track individual
+tasks — a bug fix, a feature, an investigation — across as many Claude Code
+sessions as they need.
+
+**The loop:**
+
+```text
+                    ┌────────────────────────────┐
+                    │                            │
+                    ▼                            │
+/new-project ──▶ <work> ──▶ /update-project ──▶ /resume-project
+                                │
+                                ▼
+                          /close-project
+```
+
+| Step | What happens |
+|------|-------------|
+| **new-project** | Creates a `projects/<name>/CLAUDE.md` with the task description, checklist, and links to relevant repos. Optionally sets up a git worktree for isolated work. |
+| **work** | Normal development. The project CLAUDE.md keeps you oriented — Claude loads it when you resume. |
+| **update-project** | Records what the session accomplished: checked-off items, decisions, blockers. Run this before ending a session. |
+| **resume-project** | Reloads the project context in a new session. The SessionStart hook also surfaces your recent projects automatically. |
+| **close-project** | Marks the project done and cleans up any worktrees it created. |
+
+For single-session tasks you can skip the loop — just work directly. Projects
+pay off when a task spans multiple sessions or you need to context-switch
+between efforts.
+
+**Handoffs.** When you want the next session to pick up exactly where you
+left off, use `/workspace:handoff` before `/clear`. The next session
+auto-resumes that project instead of showing the project list.
+
 ## Skills
 
-| Skill | Description |
-|-------|-------------|
-| `/workspace:setup-environment` | Set up or refresh a workspace — multi-repo from a domain, or a single-repo self-workspace wrapping the current checkout |
-| `/workspace:create-domain` | Build a custom multi-repo workspace from arbitrary repos, generating per-repo context collaboratively |
-| `/workspace:new-project` | Create a new project workspace for a task (bug, feature, CI, docs, analysis) |
-| `/workspace:handoff` | Save session progress to the project docs and arm a handoff for the next `/clear` |
-| `/workspace:resume-project` | Resume an existing project workspace — reload its context and continue |
-| `/workspace:close-project` | Close a project workspace, mark it done, and clean up its worktrees |
-| `/workspace:update-project` | Update project documentation from what was accomplished in this session |
-| `/workspace:consolidate-project` | Consolidate a bloated project CLAUDE.md by archiving completed checklist items |
-| `/workspace:update-domain` | Feed lessons learned from a project back into its domain — context files, supplemental CLAUDE.md, and reference docs |
+**Core workflow** — the project lifecycle:
+
+| Skill | Purpose |
+|-------|---------|
+| `/workspace:new-project` | Start a project for a task (bug, feature, docs, analysis) |
+| `/workspace:update-project` | Record session progress into the project docs |
+| `/workspace:resume-project` | Reload a project's context and continue |
+| `/workspace:close-project` | Mark a project done and clean up worktrees |
+| `/workspace:handoff` | Arm a handoff so the next `/clear` auto-resumes |
+| `/workspace:consolidate-project` | Archive completed checklist items from a large project |
 | `/workspace:auto-update` | Start a 5-minute loop that keeps project docs updated during idle |
+
+**Workspace setup** — usually one-time:
+
+| Skill | Purpose |
+|-------|---------|
+| `/workspace:setup-environment` | Create or refresh a workspace from a domain, or wrap a single repo |
+| `/workspace:create-domain` | Build a custom domain from arbitrary repos |
+| `/workspace:update-domain` | Feed lessons from a project back into the domain's context files |
 
 A SessionStart hook surfaces your recent projects whenever you launch Claude
 Code inside a workspace (it stays silent elsewhere). After
