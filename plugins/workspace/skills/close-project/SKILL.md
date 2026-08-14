@@ -146,7 +146,9 @@ and `P.worktree_status` is empty (self-repo project, not multi-repo).
 
    ```bash
    git -C <P.frontmatter.worktree_path> status --porcelain
-   git -C <P.frontmatter.worktree_path> rev-list --count @{upstream}..HEAD 2>/dev/null
+   git -C <P.frontmatter.worktree_path> rev-parse --abbrev-ref @{upstream} 2>/dev/null
+   # If the above fails → no_upstream. Otherwise:
+   git -C <P.frontmatter.worktree_path> rev-list --count @{upstream}..HEAD
    ```
 
    Derive status using the same logic as 2.5a (dirty/ahead/no-upstream).
@@ -159,8 +161,10 @@ and `P.worktree_status` is empty (self-repo project, not multi-repo).
 
    If "commit and push": help the user commit and push. For
    `no_upstream` branches: `git -C <worktree_path> push -u fork <branch>`.
+   If either the commit or push fails, keep the worktree and report the
+   error — do not proceed to removal.
 
-   If the worktree is clean (or the user chose to commit and push), proceed
+   If the worktree is clean (or commit and push succeeded), proceed
    to removal. If the user chose to keep the worktree, skip to step 5.
 
 3. Remove the worktree using git:
