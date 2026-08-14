@@ -39,6 +39,45 @@ no path joining is needed.
 3. **Do NOT read `P.repo_context_files` or `P.domain_docs` yet.** Store
    both lists for on-demand loading (see Step 5).
 
+## Step 2.5: Verify Self-Repo Worktree
+
+If `P.frontmatter.worktree_path` is present (self-repo project with
+worktree isolation):
+
+1. Verify the worktree exists on disk:
+
+   ```bash
+   test -d "<P.frontmatter.worktree_path>" && echo "exists" || echo "missing"
+   ```
+
+2. If the worktree exists, note for Step 3: "Worktree available at
+   `<worktree_path>` on branch `<P.frontmatter.branch>`. Use this
+   path for code changes."
+3. If the worktree is missing, warn the user and offer via
+   AskUserQuestion:
+   - **"Recreate worktree"** — recreate using git:
+
+     ```bash
+     git -C "$WS" worktree add \
+       .claude/worktrees/<branch> <P.frontmatter.branch>
+     ```
+
+     If the branch no longer exists locally, create it from origin:
+
+     ```bash
+     default_branch=$(git -C "$WS" symbolic-ref refs/remotes/origin/HEAD \
+       2>/dev/null | sed 's|refs/remotes/origin/||')
+     git -C "$WS" worktree add \
+       .claude/worktrees/<branch> -b <P.frontmatter.branch> origin/$default_branch
+     ```
+
+     Update `worktree_path` in the project CLAUDE.md frontmatter (Edit
+     tool) if the new path differs.
+   - **"Continue without worktree"** — proceed without isolation; note
+     in Step 3 summary that the worktree is missing.
+
+If `P.frontmatter.worktree_path` is absent, skip this step.
+
 ## Step 3: Present Summary
 
 Display a structured summary:
@@ -86,6 +125,24 @@ If any worktree is MISSING, suggest how to recreate it (paths in
 
 Add: "When working on code changes, use the worktree paths above
 instead of the main checkout."
+
+**If `P.frontmatter.worktree_path` is present (self-repo worktree):**
+Show the worktree status only if Step 2.5 confirmed the worktree is
+available (either it already existed or was successfully recreated).
+If the user chose "Continue without worktree" in Step 2.5, skip this
+block and note: "Proceeding without worktree — code changes will
+happen in the main checkout."
+
+When displaying an available worktree:
+
+> **Worktree:** `<worktree_path>` → branch `<branch>` (active)
+
+If Step 2.5 confirmed the worktree exists, add: "Use this worktree
+path for code changes on branch `<branch>`."
+
+If the worktree was missing and recreated, note: "Worktree was missing
+and has been recreated at `<new-path>`." Use the new path (not the
+original frontmatter value) for the display.
 
 **If `P.frontmatter.skills` is non-empty:**
 Verify the project's linked skills:

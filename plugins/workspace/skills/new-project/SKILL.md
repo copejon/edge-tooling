@@ -68,13 +68,60 @@ say 'no'."
 **Single-repo self-workspace check:** if `$WS/dev-env.yaml` has a
 top-level `self:` block, this workspace wraps the repo it lives in.
 Note `self.name` and `self.summary` for the Step 4 summary, then **skip
-steps 1d, 1e, and 1g entirely** — no repo selection (the repo is
-implicit), no worktrees (edit-in-place: code changes happen directly in
-the checkout on a branch the user picks), and no skill linking (the
-repo's `.claude/skills/` already is the workspace's). In step 1f, do not
-create PR worktrees — record any PR URL in `related_links:` only. The
-project frontmatter uses `repos: []` and omits `branch:`, `worktrees:`,
-and `skills:`.
+steps 1d and 1g** — no repo selection (the repo is implicit), no skill
+linking (the repo's `.claude/skills/` already is the workspace's). In
+step 1f, do not create PR worktrees — record any PR URL in
+`related_links:` only.
+
+**Instead of step 1e**, create an isolated worktree automatically. If the project type is `ci-testing` or `analysis`, skip worktree creation (these types don't modify code by default). Omit `branch:` and `worktree_path:` from frontmatter.
+
+1. Derive the branch name using the same logic as multi-repo step 1e-2:
+   - If JIRA was provided, extract the ticket ID and ask for a slug
+   - If no JIRA, use the project folder name
+   - For `bug` type, prefix with `fix/`
+   - Confirm the final branch name with the user
+
+2. Create the worktree using git:
+
+   ```bash
+   # Ensure .claude/worktrees/ is excluded from git tracking
+   grep -qF '.claude/worktrees' "$WS/.git/info/exclude" 2>/dev/null \
+     || echo '.claude/worktrees/' >> "$WS/.git/info/exclude"
+
+   # Determine the default branch
+   default_branch=$(git -C "$WS" symbolic-ref refs/remotes/origin/HEAD \
+     2>/dev/null | sed 's|refs/remotes/origin/||')
+   if [ -z "$default_branch" ]; then
+     for candidate in main master; do
+       if git -C "$WS" rev-parse --verify "origin/$candidate" \
+         >/dev/null 2>&1; then
+         default_branch="$candidate"; break
+       fi
+     done
+   fi
+
+   if [ -z "$default_branch" ]; then
+     echo "Cannot determine default branch from origin" >&2
+     exit 1
+   fi
+
+   # Create the worktree
+   git -C "$WS" worktree add \
+     .claude/worktrees/<branch> -b <branch> origin/$default_branch
+   ```
+
+3. Record the worktree path for the frontmatter (Step 3b):
+   `branch: <branch-name>` and
+   `worktree_path: $WS/.claude/worktrees/<branch>`.
+
+4. If `git worktree add` fails, warn the user and fall back to
+   edit-in-place: omit `branch:` and `worktree_path:` from frontmatter,
+   and note in the Step 4 summary that isolation was not possible.
+
+The project frontmatter uses `repos: []` and omits `worktrees:` and
+`skills:`. If the user explicitly requests no worktree (e.g., "no
+worktree" in the task description), skip worktree creation and omit
+`branch:` and `worktree_path:`.
 
 Ask which repos from this workspace are relevant. **Dynamically load
 the repo list** from `$WS/dev-env.yaml`:
@@ -316,9 +363,17 @@ After creating the project, provide a summary:
    > When working on code changes, use the worktree paths above
    > instead of the main checkout (`$WS/repos/<repo>/`).
 
-2b. In a single-repo self-workspace, remind instead: code changes happen
-    directly in this checkout — suggest creating a git branch named after
-    the project folder before starting.
+2b. In a single-repo self-workspace with a worktree: report the
+    worktree path and branch:
+    > **Worktree created:**
+    > - `<worktree_path>` → branch `<branch>`
+    >
+    > Code changes happen in this worktree. The main checkout stays
+    > on its current branch for reference.
+
+    If no worktree was created (user opted out or creation failed):
+    remind that code changes happen directly in this checkout — suggest
+    creating a git branch named after the project folder before starting.
 
 3. If skills were linked in Step 1g, list them:
    > **Skills linked:**
@@ -361,7 +416,7 @@ Valid `status` values: `active`, `blocked`, `done` (set only by `/workspace:clos
 project: <folder-name>
 type: <bug|feature|ci-testing|docs|analysis>
 created: <YYYY-MM-DD>
-last-active: <YYYY-MM-DD>
+last-active: <YYYY-MM-DDTHH:MM>
 status: active
 jira: <URL or "none">
 domain: <domain name from dev-env.yaml, or omit if none>
@@ -374,6 +429,12 @@ worktrees:
 # worktrees: subset of repos that have active worktrees (from Step 1e)
 # branch: the branch name used for all worktrees
 # Omit both if no worktrees were created (ci-testing, analysis non-PR)
+worktree_path: <absolute path to .claude/worktrees/<branch>>
+# worktree_path: for single-repo self-workspaces only (from Step 1e
+# self-repo flow). The absolute path from git worktree add.
+# Omit if no worktree was created (user opted out or creation failed)
+# Mutually exclusive with worktrees: (multi-repo uses worktrees:,
+# self-repo uses worktree_path:)
 skills:
   - name: <skill-name>
     source: <repo that provides it>

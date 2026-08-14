@@ -63,13 +63,14 @@ TERMINAL_STATUSES = {"done", "complete", "closed"}
 
 
 def _parse_last_active(value: str) -> float | None:
-    """Parse a YYYY-MM-DD date string into a timestamp, or None."""
+    """Parse a last-active value (YYYY-MM-DDTHH:MM or YYYY-MM-DD) into a timestamp."""
     try:
-        parts = value.split("-")
-        if len(parts) != 3:
-            return None
-        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
-        return datetime(y, m, d, 23, 59, 59).timestamp()
+        if "T" in value:
+            dt = datetime.strptime(value, "%Y-%m-%dT%H:%M")
+        else:
+            dt = datetime.strptime(value, "%Y-%m-%d")
+            dt = dt.replace(hour=23, minute=59, second=59)
+        return dt.timestamp()
     except (ValueError, OverflowError):
         return None
 
@@ -90,7 +91,7 @@ def collect_projects(projects_dir: Path) -> list[dict]:
 
         if la_ts is not None:
             sort_ts = la_ts
-            date_str = datetime.fromtimestamp(la_ts).strftime("%b %d")
+            date_str = datetime.fromtimestamp(la_ts).strftime("%b %d %H:%M")
         else:
             sort_ts = newest_mtime(d)
             if sort_ts is None:

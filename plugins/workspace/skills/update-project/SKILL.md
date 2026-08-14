@@ -44,9 +44,9 @@ Review the conversation history and identify:
 4. **New detail files in Reference Files table** — files created in
    `projects/<name>/` not yet registered in CLAUDE.md's table.
 5. **Progress entries** — milestones or outcomes to append.
-6. **`last-active` timestamp** — always update `last-active: <YYYY-MM-DD>`
-   in the frontmatter to today's date when any other update is applied.
-   If the field does not exist yet, add it after the `status:` line.
+6. **`last-active` timestamp** — always update `last-active: <YYYY-MM-DDTHH:MM>`
+   in the frontmatter to the current date and time when any other update is
+   applied. If the field does not exist yet, add it after the `status:` line.
 
 If nothing to update, check CronList for any job whose prompt contains
 `update-project`. If one exists, cancel it with CronDelete. If CronDelete
@@ -80,8 +80,8 @@ Step 3:
 > - [new Reference Files table rows if any]
 > - [progress entries to append under the Progress section]
 >
-> Also update the `last-active` frontmatter field to today's date
-> (YYYY-MM-DD) — this drives SessionStart project ordering.
+> Also update the `last-active` frontmatter field to the current date
+> and time (YYYY-MM-DDTHH:MM) — this drives SessionStart project ordering.
 >
 > Rules: only edit files under the project directory. Never change the
 > `status:` frontmatter field. Use the Edit tool for existing files,

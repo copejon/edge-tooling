@@ -104,7 +104,7 @@ def stamp_last_active(claude_md: Path) -> None:
     if not lines or lines[0].strip() != "---":
         return
 
-    today = datetime.date.today().isoformat()
+    today = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M")
     found = False
     end = len(lines)
 
