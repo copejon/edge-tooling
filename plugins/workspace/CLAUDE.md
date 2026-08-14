@@ -10,7 +10,7 @@ the `workspace` Claude Code plugin.
 ## What This Repo Is
 
 The **`workspace`** plugin: an installable Claude Code plugin that bootstraps
-and manages multi-repo dev environments for AI-assisted development. Repo root
+and manages single- and multi-repo dev environments for AI-assisted development. Repo root
 = plugin root.
 
 Two roots are kept strictly separate:

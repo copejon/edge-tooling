@@ -94,7 +94,7 @@ def parse_frontmatter(path: Path) -> dict[str, Any]:
 
 
 def stamp_last_active(claude_md: Path) -> None:
-    """Update or insert last-active in CLAUDE.md frontmatter to today's date."""
+    """Update or insert last-active in CLAUDE.md frontmatter (YYYY-MM-DDTHH:MM)."""
     try:
         text = claude_md.read_text()
     except OSError:

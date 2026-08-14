@@ -139,7 +139,7 @@ self:
   name: my-repo            # workspace name (usually the repo basename)
   summary: "Brief description of the repo"
 
-repos: []                  # no external repos to clone
+repos: []                  # initially empty; optional reference repos
 ```
 
 **Multi-repo (domain workspace):**

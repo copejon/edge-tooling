@@ -67,12 +67,21 @@ worktree isolation):
      ```bash
      default_branch=$(git -C "$WS" symbolic-ref refs/remotes/origin/HEAD \
        2>/dev/null | sed 's|refs/remotes/origin/||')
+     ```
+
+     If `default_branch` is empty, report the error ("cannot determine
+     default branch — run `git remote set-head origin --auto`") and
+     offer "Continue without worktree" instead.
+
+     ```bash
      git -C "$WS" worktree add \
        .claude/worktrees/<branch> -b <P.frontmatter.branch> origin/$default_branch
      ```
 
-     Update `worktree_path` in the project CLAUDE.md frontmatter (Edit
-     tool) if the new path differs.
+     If `git worktree add` fails, report the error and offer "Continue
+     without worktree". Update `worktree_path` in the project CLAUDE.md
+     frontmatter (Edit tool) only after successful recreation, and only
+     if the new path differs.
    - **"Continue without worktree"** — proceed without isolation; note
      in Step 3 summary that the worktree is missing.
 
