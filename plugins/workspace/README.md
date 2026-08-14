@@ -74,6 +74,11 @@ between efforts.
 left off, use `/workspace:handoff` before `/clear`. The next session
 auto-resumes that project instead of showing the project list.
 
+**Versioning projects.** The `projects/` folder is gitignored by default.
+If you want to track it in git, use a separate private repo — project docs
+often contain internal context (decisions, blockers, task notes) that
+shouldn't live in the repos you contribute to.
+
 ## Skills
 
 **Core workflow** — the project lifecycle:
