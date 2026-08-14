@@ -106,3 +106,7 @@ no `dev-env.yaml` to anchor walk-up resolution.
 This plugin lives in `plugins/workspace/` within the
 [edge-tooling](https://github.com/openshift-eng/edge-tooling) repo.
 PRs use the fork model — push to your fork, open a PR against `main`.
+
+Bump the version in **both** `plugins/workspace/.claude-plugin/plugin.json`
+and `.claude-plugin/marketplace.json` on every PR that changes plugin
+behavior or documentation.
