@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """Hook validator for prow-job-analyzer agent output.
 
-Supports two hook types:
-  - SubagentStop: payload contains last_assistant_message directly.
-  - Stop: payload may contain transcript_path; the last assistant
-    message is extracted from the JSONL transcript. Gated by
-    CI_DOCTOR_RCA_SESSION env var (no-op when unset).
+Detects the hook type via the payload's ``hook_event_name`` field:
+  - SubagentStop: validate ``last_assistant_message`` directly, falling
+    back to the JSONL transcript when it is absent.
+  - Stop: gated by the CI_DOCTOR_RCA_SESSION env var (no-op when unset);
+    the last assistant message is extracted from the transcript.
+  - Any other/absent event: fail safe and skip (never block).
+
+Do not detect the hook type by payload shape: on Claude Code 2.1.x the
+main-agent Stop payload also carries ``last_assistant_message``, so a
+shape check would validate ordinary prose and block every turn.
 
 Validates the message against the expected JSON schema and returns a
 block decision with specific corrections when validation fails.
@@ -247,12 +252,19 @@ def main():
         print("WARNING: validate-rca-output: expected dict payload, skipping validation", file=sys.stderr)
         sys.exit(0)
 
-    # Detect hook type by payload shape
-    if "last_assistant_message" in payload:
-        # SubagentStop hook path
+    # Detect hook type by the authoritative hook_event_name field.
+    hook_event = payload.get("hook_event_name")
+
+    if hook_event == "SubagentStop":
+        # prow-job-analyzer output — validate directly (with transcript fallback)
         message = payload.get("last_assistant_message", "")
-    else:
-        # Stop hook path — only relevant for RCA sessions
+        if not message:
+            transcript_path = payload.get("transcript_path")
+            if transcript_path and os.path.isfile(transcript_path):
+                message = _extract_last_assistant_message_from_transcript(transcript_path)
+
+    elif hook_event == "Stop":
+        # Main-agent Stop — only validate inside an explicit RCA session
         if not os.environ.get("CI_DOCTOR_RCA_SESSION"):
             sys.exit(0)
 
@@ -264,6 +276,11 @@ def main():
         if not message:
             print("WARNING: validate-rca-output: Stop hook could not locate assistant message, skipping", file=sys.stderr)
             sys.exit(0)
+
+    else:
+        # Unknown/absent hook_event_name (older CC, unexpected payload): fail safe — do not block.
+        print(f"WARNING: validate-rca-output: unrecognized hook_event_name {hook_event!r}, skipping", file=sys.stderr)
+        sys.exit(0)
 
     errors = validate_message(message)
 
