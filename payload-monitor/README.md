@@ -35,6 +35,8 @@ python -m payload_monitor --merge-analysis reports/analysis-2026-03-25.json --ou
 7. **Searches JIRA** for existing bugs matching failure signatures
 8. **Generates an HTML dashboard** with health summaries, failure details, regressions, timing insights, and JIRA integration
 
+For a focused Component Readiness triage dump (counts, JIRA-linked triages, optional untriaged tests) without payload/Prow collection, use [ci-tooling/readiness-report](../ci-tooling/readiness-report/).
+
 ## Architecture
 
 ```text

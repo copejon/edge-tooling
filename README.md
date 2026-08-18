@@ -11,6 +11,7 @@ Automation, AI skills, and deployment tools for OpenShift edge engineering. This
 | Single Node OpenShift with DU config | [sno-deploy/](sno-deploy/) |
 | LVM Operator development workspace | [environments/lvm-operator/](environments/lvm-operator/) |
 | Nightly payload health monitoring | [payload-monitor/](payload-monitor/) |
+| Component Readiness triage report (HA vs edge) | [ci-tooling/readiness-report/](ci-tooling/readiness-report/) |
 | Multi-repo workspace management | [workspace plugin](plugins/workspace/) via the marketplace |
 | Claude Code plugins for edge workflows | [plugins/](plugins/) via the marketplace |
 
@@ -72,13 +73,20 @@ Then enable whichever plugins you need. See the [plugin README](plugins/README.m
 | [payload-monitor/](payload-monitor/) | Nightly payload health monitoring for edge topologies |
 | [environments/lvm-operator/](environments/lvm-operator/) | Development workspace for the LVM Storage operator |
 
+## CI Tools
+
+| Directory | What it does |
+|-----------|-------------|
+| [ci-tooling/](ci-tooling/) | Collection of standalone CI helpers |
+| [ci-tooling/readiness-report/](ci-tooling/readiness-report/) | Sippy Component Readiness report for HA vs TNF/TNA/SNO |
+
 ## Documentation
 
 | Resource | What it covers |
 |----------|---------------|
 | [CLAUDE.md](CLAUDE.md) | Repo overview, tool routing, component-level guides |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution model, code standards, architectural patterns |
-| [docs/claude/workflows.md](docs/claude/workflows.md) | Deployment walkthroughs (EC2 instance to two-node cluster) |
+| [docs/claude/workflows.md](docs/claude/workflows.md) | Deployment walkthroughs and Component Readiness reports |
 | [docs/claude/prerequisites.md](docs/claude/prerequisites.md) | Required credentials and tools |
 | Component READMEs | Per-tool setup, prerequisites, and usage |
 

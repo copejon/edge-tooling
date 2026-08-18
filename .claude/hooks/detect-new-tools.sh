@@ -25,6 +25,8 @@ DOCUMENTED_TOOLS=(
     "ec2-deploy"
     "sno-deploy"
     "payload-monitor"
+    "ci-tooling"
+    "ci-tooling/readiness-report"
     "environments/lvm-operator"
     "plugins"
 )
@@ -61,16 +63,18 @@ for dir in "$CWD"/*/; do
     fi
 done
 
-# Check environments subdirectories
-if [ -d "$CWD/environments" ]; then
-    for dir in "$CWD/environments"/*/; do
-        [ -d "$dir" ] || continue
-        dirname=$(basename "$dir")
-        if is_tool_directory "$dir"; then
-            FOUND_TOOLS+=("environments/$dirname")
-        fi
-    done
-fi
+# Check nested tool collections (environments, ci-tooling)
+for parent in environments ci-tooling; do
+    if [ -d "$CWD/$parent" ]; then
+        for dir in "$CWD/$parent"/*/; do
+            [ -d "$dir" ] || continue
+            dirname=$(basename "$dir")
+            if is_tool_directory "$dir"; then
+                FOUND_TOOLS+=("$parent/$dirname")
+            fi
+        done
+    fi
+done
 
 # Compare found tools against documented tools
 declare -a NEW_TOOLS=()

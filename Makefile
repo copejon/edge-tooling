@@ -1,4 +1,4 @@
-.PHONY: setup-githooks lint-markdown lint-all-markdown lint-skills lint-all-skills
+.PHONY: setup-githooks lint-markdown lint-all-markdown lint-fix-markdown lint-shellcheck lint-skills lint-all-skills lint-gofmt lint-fix-gofmt
 
 setup-githooks:
 	git config core.hooksPath .githooks
@@ -21,3 +21,9 @@ lint-skills:
 
 lint-all-skills:
 	scripts/lint-skills.py --check-all-files
+
+lint-gofmt:
+	scripts/lint-gofmt.sh
+
+lint-fix-gofmt:
+	scripts/lint-gofmt.sh --fix

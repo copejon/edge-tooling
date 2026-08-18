@@ -8,3 +8,4 @@
 | SSH Keys | All components | Generate with `ssh-keygen` |
 | CI Token | CI builds | https://console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com |
 | RHEL Subscription | EC2/hypervisor hosts | Red Hat Subscription Manager |
+| Go 1.21+ | CI Tooling (`readiness-report`) | https://go.dev/dl/ |

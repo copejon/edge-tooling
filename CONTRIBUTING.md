@@ -20,7 +20,7 @@ This installs a pre-commit hook that runs markdownlint on staged `.md` files. Co
 
 | Type | Location | Guide |
 |------|----------|-------|
-| New tool | `<tool-name>/` at repo root | [Adding a Tool](#adding-a-tool) below |
+| New tool | `<tool-name>/` at repo root, or `ci-tooling/<name>/` for CI helpers | [Adding a Tool](#adding-a-tool) below |
 | Plugin | `plugins/<name>/` | [Plugin Contributing Guide](plugins/docs/CONTRIBUTING.md) |
 | Bug fix / enhancement | Component directory | Follow component README |
 | Documentation | Markdown files | [Code Standards](#code-standards) below |
@@ -32,7 +32,7 @@ Format: `<type>(<scope>): <subject>`
 
 **Types**: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`
 
-**Scopes**: component name — `plugins`, `submodule`, `ec2-deploy`, `sno-deploy`, etc.
+**Scopes**: component name — `plugins`, `submodule`, `ec2-deploy`, `sno-deploy`, `ci-tooling`, etc.
 
 **Branch naming**: `<type>/<description>` — e.g., `feat/new-tool`, `fix/deploy-bug`, `plugin/my-plugin`
 
@@ -59,6 +59,11 @@ chore(submodule): update two-node-toolbox (abc1234 -> def5678, 5 commits)
 - PEP 8
 - Must pass ruff
 
+### Go
+
+- `gofmt -s` (tabs, simplify)
+- Must pass `make lint-gofmt` (CI). Rewrite locally with `make lint-fix-gofmt`.
+
 ### YAML
 
 - 2-space indentation
@@ -80,10 +85,10 @@ chore(submodule): update two-node-toolbox (abc1234 -> def5678, 5 commits)
 
 ## Adding a Tool
 
-1. Create a directory at repo root with a `Makefile` or `README.md`
+1. Create a directory at repo root with a `Makefile` or `README.md`. CI helper CLIs go under `ci-tooling/<name>/`.
 2. Add a `README.md` documenting purpose, prerequisites, and usage
-3. Update the tool table in root `CLAUDE.md`
-4. Add the directory name to the `DOCUMENTED_TOOLS` array in `.claude/hooks/detect-new-tools.sh`
+3. Update the tool table in root `CLAUDE.md` and the root `README.md`
+4. Add the directory name to the `DOCUMENTED_TOOLS` array in `.claude/hooks/detect-new-tools.sh` (use `ci-tooling/<name>` for nested CI tools)
 5. Commit: `feat(<tool-name>): add <tool-name>`
 
 ## Skills, Agents, and Commands

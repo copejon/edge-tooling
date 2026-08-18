@@ -47,7 +47,7 @@ Automated monitoring of OpenShift nightly payload health across edge topologies 
 4. Spawns AI subagents (one per blocking failure) to perform root cause analysis using marketplace CI skills
 5. Patches AI analysis cards into the HTML report
 
-For detailed architecture, configuration, and CLI reference, see [`payload-monitor/README.md`](../../payload-monitor/README.md).
+For detailed architecture, configuration, and CLI reference, see [`payload-monitor/README.md`](../../payload-monitor/README.md). For a Sippy Component Readiness-only triage report (no payload/Prow collection), see [`ci-tooling/readiness-report/README.md`](../../ci-tooling/readiness-report/README.md).
 
 ## Author
 
