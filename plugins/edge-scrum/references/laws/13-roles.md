@@ -22,6 +22,6 @@ Technical role. Drives architectural alignment; advises on release backlog ranki
 
 **Daily:** Check nightly release status for 4.18–current nightlies; check Jira tickets; monitor CI Slack channels (`#ci-single-node`, `#ci-two-node-arbiter`, `#ci-two-node-fencing`, `#forum-ocp-release-oversight`, `#announce-testplatform`); attend TRT standup; debug and file Jira tickets for CI failures.
 
-**Weekly:** Update Payload Manager doc; check component readiness regressions via Sippy (4.18–4.21 HA vs single comparisons); sync with next rotation person.
+**Weekly:** Update Payload Manager doc; check component readiness regressions via Sippy (HA vs TNF/TNA/SNO) using `ci-tooling/readiness-report` (`go run ./cmd -release <ver> -format md -untriaged`); sync with next rotation person.
 
 **Sprintly:** Hand off to next rotation; update `edge-enablement-payload-manager` Slack alias.

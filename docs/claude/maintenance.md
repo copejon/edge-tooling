@@ -32,7 +32,13 @@ DOCUMENTED_TOOLS=(
     "two-node-toolbox"
     "ec2-deploy"
     "sno-deploy"
+    "payload-monitor"
+    "ci-tooling"
+    "ci-tooling/readiness-report"
     "environments/lvm-operator"
+    "plugins"
     "your-new-tool"  # Add new tools here
 )
 ```
+
+The hook scans top-level directories and nested collections under `environments/` and `ci-tooling/`. When adding a helper under `ci-tooling/`, add both the parent (`ci-tooling`) if it is new and the nested path (`ci-tooling/<name>`).

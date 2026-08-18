@@ -18,3 +18,14 @@
 1. Clone workspace: `git clone <this-repo> lvm-workspace`
 2. Clone repos: `cd lvm-workspace/environments/lvm-operator/repos && git clone <lvm-operator>`
 3. Develop with full context from workspace root
+
+## Component Readiness Report
+
+Snapshot HA vs edge topology regressions from Sippy (TNF, TNA, SNO). Requires Go 1.21+ and network access to Sippy; no credentials.
+
+1. `cd ci-tooling/readiness-report`
+2. Default TSV for 5.0: `go run ./cmd`
+3. Markdown with untriaged tests: `go run ./cmd -format md -untriaged`
+4. List views for a release: `go run ./cmd -list-views -release 4.22`
+
+See [ci-tooling/readiness-report/README.md](../../ci-tooling/readiness-report/README.md) for flags and output columns. For nightly payload health (blocking jobs, Prow, JIRA), use [payload-monitor](../../payload-monitor/).
