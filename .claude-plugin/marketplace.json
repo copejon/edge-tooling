@@ -13,6 +13,12 @@
       "version": "1.0.0"
     },
     {
+      "name": "edge-contribution",
+      "source": "./plugins/edge-contribution",
+      "description": "Cross-workstream contribution reporting for OpenShift Edge — IC breadth and manager team heatmap with flexibility/opportunity scores, derived from Jira and GitHub activity",
+      "version": "0.1.0"
+    },
+    {
       "name": "edge-ic",
       "source": "./plugins/edge-ic",
       "description": "Individual contributor workflow automation for TODO management, status reporting, and Jira updates",
