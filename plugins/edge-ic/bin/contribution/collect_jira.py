@@ -1,0 +1,1 @@
+../../../edge-contribution/bin/collect_jira.py
