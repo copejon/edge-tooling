@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GCSWEB_BASE="gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs"
+GCSWEB_BASE="gcs.ci.openshift.org/gcs"
 SIPPY_API="https://sippy.dptools.openshift.org/api/jobs"
 
 ORIGINAL_ARGS=("$@")
@@ -187,7 +187,7 @@ fetch_failure_reason() {
     local junit_url="${gcs_base}/artifacts/junit_operator.xml"
 
     local xml
-    xml=$(curl -s --max-time 15 "$junit_url" 2>/dev/null) || true
+    xml=$(curl -sL --max-time 15 "$junit_url" 2>/dev/null) || true
 
     if [[ -z "$xml" ]]; then
         echo "unable to fetch logs"
@@ -286,7 +286,7 @@ collect_topology() {
         if [[ "$url" != "no-url" && "$url" != "null" ]]; then
             local gcs_url="${url/prow.ci.openshift.org\/view\/gs\//${GCSWEB_BASE}/}"
             local finished
-            finished=$(curl -s --max-time 10 "${gcs_url}/finished.json" 2>/dev/null | jq -r '.result // "unknown"' 2>/dev/null || echo "unknown")
+            finished=$(curl -sL --max-time 10 "${gcs_url}/finished.json" 2>/dev/null | jq -r '.result // "unknown"' 2>/dev/null || echo "unknown")
             case "$finished" in
                 SUCCESS)  status="PASS" ;;
                 FAILURE)  status="FAIL" ;;
