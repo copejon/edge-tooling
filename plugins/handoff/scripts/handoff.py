@@ -226,7 +226,7 @@ def cmd_path(_: argparse.Namespace) -> int:
 def cmd_arm(args: argparse.Namespace) -> int:
     path = note_path(project_dir())
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except OSError:
         emit({"status": "error", "message": f"No note to arm at {path}"})
         return 0
@@ -244,7 +244,7 @@ def cmd_arm(args: argparse.Namespace) -> int:
                              "use HH:MM or an ISO 8601 timestamp"})
             return 0
     else:
-        minutes = args.ttl_minutes or ttl_seconds() // 60
+        minutes = args.ttl_minutes if args.ttl_minutes is not None else ttl_seconds() // 60
         expires = now + timedelta(minutes=minutes)
 
     remaining = (expires - now).total_seconds()
@@ -261,7 +261,7 @@ def cmd_arm(args: argparse.Namespace) -> int:
 
     stamp = expires.astimezone().isoformat(timespec="minutes")
     try:
-        path.write_text(f"---\nexpires_at: {stamp}\n---\n\n{body}")
+        path.write_text(f"---\nexpires_at: {stamp}\n---\n\n{body}", encoding="utf-8")
     except OSError as exc:
         emit({"status": "error", "message": f"Could not write {path}: {exc}"})
         return 0

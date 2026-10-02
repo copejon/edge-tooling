@@ -130,12 +130,15 @@ temporary.
 
 ### Step 6: Report
 
-Tell the user, filling in the values:
+If `status` was `"ok"`, tell the user, filling in the values:
 
 > Handoff armed for `<project_dir>` until `<expires_at>` (`<expires_in>`).
 > The next `/clear` or new session in this directory resumes at
 > `<next task>`, once. The note is at `<path>`; edit it before then if
 > anything is off, keeping its `expires_at` header.
+
+If `status` was `"error"`, you already reported it in Step 4 — do not
+produce the armed report above.
 
 ## Examples
 
