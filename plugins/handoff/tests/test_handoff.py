@@ -96,6 +96,14 @@ class TestPath(HandoffFixture):
             "path", HANDOFF_TTL_MINUTES="5").stdout)
         self.assertEqual(out["ttl_minutes"], 5)
 
+    def test_project_dir_flag_overrides_env_var(self):
+        """The Bash tool never exports CLAUDE_PROJECT_DIR; only the skill's
+        explicit --project-dir can be trusted to match what the hook sees."""
+        other = self.tmp / "elsewhere"
+        other.mkdir()
+        out = json.loads(self.run_handoff("path", "--project-dir", str(other)).stdout)
+        self.assertEqual(out["project_dir"], str(other))
+
 
 class TestRead(HandoffFixture):
 
@@ -135,10 +143,12 @@ class TestRead(HandoffFixture):
         self.assertTrue(path.exists())
 
     def test_oversized_note_is_truncated(self):
+        """Stay under Claude Code's 10,000-char additionalContext limit, past
+        which it drops to a bare file-path preview instead of the full note."""
         self.arm(text="x" * 100_000)
         ctx = json.loads(self.run_handoff("read").stdout)[
             "hookSpecificOutput"]["additionalContext"]
-        self.assertLess(len(ctx), 20_000)
+        self.assertLess(len(ctx), 10_000)
 
     def test_unwritable_store_never_fails(self):
         self.store.write_text("not a directory")

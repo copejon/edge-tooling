@@ -22,7 +22,7 @@ this session's state, decisions, and next step.
 Run via Bash:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" path
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" path --project-dir "${CLAUDE_PROJECT_DIR}"
 ```
 
 Parse the JSON:
@@ -107,7 +107,7 @@ Step 1 as the reference:
   its next occurrence.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" arm [--ttl-minutes N | --until HH:MM|ISO]
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" arm --project-dir "${CLAUDE_PROJECT_DIR}" [--ttl-minutes N | --until HH:MM|ISO]
 ```
 
 Parse the JSON:
@@ -152,7 +152,7 @@ produce the armed report above.
 To disarm without clearing:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" clear
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" clear --project-dir "${CLAUDE_PROJECT_DIR}"
 ```
 
 ## Notes

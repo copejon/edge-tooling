@@ -30,9 +30,11 @@ DEFAULT_TTL_MINUTES = 60
 # A handoff that outlives a long weekend is a stale instruction waiting to
 # fire into an unrelated session.
 MAX_TTL_MINUTES = 7 * 24 * 60
-# The note is injected verbatim; cap it so a runaway note cannot flood the
-# fresh context it exists to protect.
-MAX_INJECT_BYTES = 16 * 1024
+# The note is injected verbatim via hookSpecificOutput.additionalContext,
+# which Claude Code truncates to a bare file-path preview past 10,000
+# characters. Stay well under that once build_context()'s wrapper text and
+# a long project path are added on top.
+MAX_INJECT_BYTES = 8 * 1024
 
 
 def handoff_dir() -> Path:
@@ -42,14 +44,18 @@ def handoff_dir() -> Path:
     return Path.home() / ".claude" / "handoffs"
 
 
-def project_dir() -> Path:
+def project_dir(explicit: str | None = None) -> Path:
     """The directory a handoff belongs to.
 
-    CLAUDE_PROJECT_DIR is set by Claude Code for hooks and Bash calls alike,
-    so `path` (run by the skill) and `read` (run by the hook) agree. Each git
-    worktree is its own launch directory, hence its own handoff.
+    Claude Code only sets CLAUDE_PROJECT_DIR as a real environment variable
+    for hook subprocesses, so `read` (run by the hook) can rely on it. The
+    skill invokes `path`, `arm`, and `clear` through the Bash tool instead,
+    where `${CLAUDE_PROJECT_DIR}` is a text substitution in the command
+    string, not an exported variable — those commands must pass it as
+    `explicit` so a `cd` by the agent can't desync the two sides' note key.
+    Each git worktree is its own launch directory, hence its own handoff.
     """
-    raw = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    raw = explicit or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     return Path(raw).expanduser().resolve()
 
 
@@ -200,8 +206,8 @@ def build_context(text: str, age: float, directory: Path) -> str:
     )
 
 
-def cmd_path(_: argparse.Namespace) -> int:
-    directory = project_dir()
+def cmd_path(args: argparse.Namespace) -> int:
+    directory = project_dir(args.project_dir)
     path = note_path(directory)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -224,7 +230,7 @@ def cmd_path(_: argparse.Namespace) -> int:
 
 
 def cmd_arm(args: argparse.Namespace) -> int:
-    path = note_path(project_dir())
+    path = note_path(project_dir(args.project_dir))
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
@@ -293,8 +299,8 @@ def cmd_read(_: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_clear(_: argparse.Namespace) -> int:
-    path = note_path(project_dir())
+def cmd_clear(args: argparse.Namespace) -> int:
+    path = note_path(project_dir(args.project_dir))
     existed = path.is_file()
     if existed:
         try:
@@ -307,17 +313,24 @@ def cmd_clear(_: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    project_dir_help = (
+        "Project directory (pass \"${CLAUDE_PROJECT_DIR}\" from the skill; "
+        "the Bash tool does not export it as an environment variable)"
+    )
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("path", help="Print where this project's handoff note goes")
+    path = sub.add_parser("path", help="Print where this project's handoff note goes")
+    path.add_argument("--project-dir", help=project_dir_help)
     arm = sub.add_parser("arm", help="Stamp the written note's expiry")
+    arm.add_argument("--project-dir", help=project_dir_help)
     when = arm.add_mutually_exclusive_group()
     when.add_argument("--ttl-minutes", type=int,
                       help="Expire this many minutes from now")
     when.add_argument("--until",
                       help="Expire at HH:MM (next occurrence) or an ISO 8601 time")
     sub.add_parser("read", help="Consume a handoff at session start (hook mode)")
-    sub.add_parser("clear", help="Disarm a pending handoff")
+    clear = sub.add_parser("clear", help="Disarm a pending handoff")
+    clear.add_argument("--project-dir", help=project_dir_help)
     return parser
 
 
