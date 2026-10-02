@@ -142,13 +142,17 @@ class TestRead(HandoffFixture):
         self.assertEqual(self.run_handoff("read").stdout, "")
         self.assertTrue(path.exists())
 
-    def test_oversized_note_is_truncated(self):
-        """Stay under Claude Code's 10,000-char additionalContext limit, past
-        which it drops to a bare file-path preview instead of the full note."""
-        self.arm(text="x" * 100_000)
+    def test_oversized_unarmed_note_is_visibly_truncated(self):
+        """An unarmed note (arm already rejects this for the armed path)
+        must stay under Claude Code's 10,000-char additionalContext limit,
+        past which it drops to a bare file-path preview — and must say so
+        rather than silently dropping content."""
+        path = self.arm(text="x" * 100_000)
         ctx = json.loads(self.run_handoff("read").stdout)[
             "hookSpecificOutput"]["additionalContext"]
         self.assertLess(len(ctx), 10_000)
+        self.assertIn("note truncated", ctx)
+        self.assertIn(str(path.with_name(path.stem + ".consumed.md")), ctx)
 
     def test_unwritable_store_never_fails(self):
         self.store.write_text("not a directory")
@@ -212,6 +216,13 @@ class TestArm(HandoffFixture):
 
     def test_arm_without_note_errors(self):
         self.assertEqual(self.arm_with()["status"], "error")
+
+    def test_arm_rejects_note_too_big_to_inject(self):
+        path = self.arm(text="x" * 100_000)
+        out = self.arm_with()
+        self.assertEqual(out["status"], "error")
+        self.assertIn("injection limit", out["message"])
+        self.assertNotIn("expires_at", path.read_text())
 
     def test_armed_expiry_outlives_default_ttl(self):
         path = self.arm()

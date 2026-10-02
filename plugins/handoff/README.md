@@ -62,7 +62,10 @@ this plugin everywhere else.
   at 7 days. An unarmed note expires 60 minutes after it was last written.
   After firing or expiring, the note is kept as `<key>.consumed.md` for
   manual recovery.
-- **Size cap:** at most 16 KiB of the note is injected.
+- **Size cap:** `arm` rejects a note too big to fit, once wrapped, under
+  Claude Code's 10,000-character hook output limit. An unarmed note that
+  somehow exceeds it is truncated on injection, visibly, with the full note
+  still recoverable from `<key>.consumed.md`.
 - **Disarm:** `python3 <plugin root>/scripts/handoff.py clear`.
 
 ## Testing

@@ -30,11 +30,15 @@ DEFAULT_TTL_MINUTES = 60
 # A handoff that outlives a long weekend is a stale instruction waiting to
 # fire into an unrelated session.
 MAX_TTL_MINUTES = 7 * 24 * 60
-# The note is injected verbatim via hookSpecificOutput.additionalContext,
-# which Claude Code truncates to a bare file-path preview past 10,000
-# characters. Stay well under that once build_context()'s wrapper text and
-# a long project path are added on top.
-MAX_INJECT_BYTES = 8 * 1024
+# Claude Code truncates hookSpecificOutput.additionalContext to a bare
+# file-path preview past this many characters (platform limit, not ours).
+HOOK_CONTEXT_LIMIT = 10_000
+# Margin against build_context()'s wrapper text varying slightly with age
+# ("just now" vs "7 days ago") once the budget is computed for a note.
+CONTEXT_SAFETY_MARGIN = 200
+# Sanity ceiling on how much of a note file is ever read into memory. Not
+# the injection limit — see max_body_chars() for that.
+MAX_NOTE_READ_BYTES = 256 * 1024
 
 
 def handoff_dir() -> Path:
@@ -175,7 +179,7 @@ def consume(directory: Path) -> tuple[str, float] | None:
         return None
     try:
         age = time.time() - path.stat().st_mtime
-        text = path.read_bytes()[:MAX_INJECT_BYTES].decode("utf-8", "replace")
+        text = path.read_bytes()[:MAX_NOTE_READ_BYTES].decode("utf-8", "replace")
     except OSError:
         retire(path, directory)
         return None
@@ -187,8 +191,11 @@ def consume(directory: Path) -> tuple[str, float] | None:
     expired = now_local() > expires if expires else age > ttl_seconds()
     if expired or not body.strip():
         return None
-    # A negative age means clock skew, not a note from the future.
-    return body, max(age, 0.0)
+    # A negative age means clock skew, not a note from the future. `arm`
+    # already rejects a body too big to inject; this only bounds the rare
+    # note that reached here unarmed (default-TTL path) or was hand-edited
+    # past the limit afterward.
+    return bound_body(body, directory), max(age, 0.0)
 
 
 def build_context(text: str, age: float, directory: Path) -> str:
@@ -204,6 +211,24 @@ def build_context(text: str, age: float, directory: Path) -> str:
         f"{text.rstrip()}\n"
         "--- END HANDOFF NOTE ---"
     )
+
+
+def max_body_chars(directory: Path) -> int:
+    """How much note body fits under HOOK_CONTEXT_LIMIT once wrapped."""
+    wrapper_len = len(build_context("", 0.0, directory))
+    return max(HOOK_CONTEXT_LIMIT - wrapper_len - CONTEXT_SAFETY_MARGIN, 0)
+
+
+def bound_body(body: str, directory: Path) -> str:
+    """Truncate to max_body_chars, visibly, pointing at the retired original."""
+    limit = max_body_chars(directory)
+    if len(body) <= limit:
+        return body
+    marker = (
+        "\n\n[... note truncated: exceeded the session-start injection "
+        f"limit; full note retained at {consumed_path(directory)} ...]"
+    )
+    return body[:max(limit - len(marker), 0)].rstrip() + marker
 
 
 def cmd_path(args: argparse.Namespace) -> int:
@@ -230,7 +255,8 @@ def cmd_path(args: argparse.Namespace) -> int:
 
 
 def cmd_arm(args: argparse.Namespace) -> int:
-    path = note_path(project_dir(args.project_dir))
+    directory = project_dir(args.project_dir)
+    path = note_path(directory)
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
@@ -239,6 +265,13 @@ def cmd_arm(args: argparse.Namespace) -> int:
     _, body = split_frontmatter(text)
     if not body.strip():
         emit({"status": "error", "message": f"Note at {path} is empty"})
+        return 0
+    limit = max_body_chars(directory)
+    if len(body) > limit:
+        emit({"status": "error",
+              "message": f"Note is {len(body)} characters, "
+                         f"{len(body) - limit} over the {limit}-character "
+                         "session-start injection limit; shorten it"})
         return 0
 
     now = now_local()
