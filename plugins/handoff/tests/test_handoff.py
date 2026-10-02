@@ -84,6 +84,22 @@ class TestPath(HandoffFixture):
         self.assertEqual(first, again)
         self.assertNotEqual(first, elsewhere)
 
+    def test_path_distinguishes_similarly_sanitized_projects(self):
+        """'/tmp/foo-bar' and '/tmp/foo/bar' both sanitize to the same
+        string; the trailing hash must still tell them apart."""
+        a = self.tmp / "foo-bar"
+        b = self.tmp / "foo" / "bar"
+        out_a = json.loads(self.run_handoff("path", project=a).stdout)["path"]
+        out_b = json.loads(self.run_handoff("path", project=b).stdout)["path"]
+        self.assertNotEqual(out_a, out_b)
+
+    def test_path_stays_within_filename_limits_for_deep_projects(self):
+        deep = self.tmp
+        for part in ["nested"] * 30:
+            deep = deep / part
+        out = json.loads(self.run_handoff("path", project=deep).stdout)
+        self.assertLessEqual(len(Path(out["path"]).name), 100)
+
     def test_path_reports_existing_note_and_workspace(self):
         self.arm()
         (self.project / "dev-env.yaml").write_text("repos: []\n")
@@ -141,6 +157,15 @@ class TestRead(HandoffFixture):
         path = self.arm(project=other)
         self.assertEqual(self.run_handoff("read").stdout, "")
         self.assertTrue(path.exists())
+
+    def test_note_not_leaked_across_similarly_sanitized_projects(self):
+        """Regression: '/tmp/foo-bar' and '/tmp/foo/bar' used to flatten to
+        the same note_key, so B's read would consume A's note."""
+        a = self.tmp / "foo-bar"
+        b = self.tmp / "foo" / "bar"
+        path_a = self.arm(project=a)
+        self.assertEqual(self.run_handoff("read", project=b).stdout, "")
+        self.assertTrue(path_a.exists())
 
     def test_oversized_unarmed_note_is_visibly_truncated(self):
         """An unarmed note (arm already rejects this for the armed path)

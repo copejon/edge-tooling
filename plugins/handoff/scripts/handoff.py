@@ -18,6 +18,7 @@ declare python dependencies.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -63,9 +64,23 @@ def project_dir(explicit: str | None = None) -> Path:
     return Path(raw).expanduser().resolve()
 
 
+# Keeps note_key short on deeply nested paths without losing the hash's
+# collision resistance; a trailing hex digest still makes it distinct.
+NOTE_KEY_READABLE_CHARS = 60
+
+
 def note_key(directory: Path) -> str:
-    """Flatten an absolute path into a filename, as ~/.claude/projects does."""
-    return re.sub(r"[^A-Za-z0-9._-]", "-", str(directory)).strip("-") or "root"
+    """Flatten an absolute path into a short, collision-free filename.
+
+    The sanitized path alone is not distinct: '/tmp/foo-bar' and
+    '/tmp/foo/bar' both flatten to 'tmp-foo-bar'. A trailing hash of the
+    full resolved path disambiguates them; truncating the readable part
+    keeps long, deeply nested paths from hitting filesystem name limits.
+    """
+    readable = re.sub(r"[^A-Za-z0-9._-]", "-", str(directory)).strip("-") or "root"
+    readable = readable[-NOTE_KEY_READABLE_CHARS:].strip("-") or "root"
+    digest = hashlib.sha256(str(directory).encode("utf-8")).hexdigest()[:10]
+    return f"{readable}-{digest}"
 
 
 def note_path(directory: Path) -> Path:
