@@ -4,11 +4,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GANGWAY_BIN="${GANGWAY_BIN:-$(command -v gangway-cli || true)}"
 GANGWAY_API="https://gangway-ci.apps.ci.l2s4.p1.openshiftapps.com"
-GCSWEB_BASE="gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs"
+GCSWEB_BASE="gcs.ci.openshift.org/gcs"
 SIPPY_API="https://sippy.dptools.openshift.org/api/jobs"
 IMAGE_BASE="quay.io/openshift-release-dev/ocp-release"
 ARCH="x86_64"
 DELAY=10
+STAGGER=0             # seconds between jobs (0 = use DELAY only)
+WAVE_SIZE=0            # jobs per wave (0 = no wave batching)
+WAVE_DELAY=3600        # seconds to wait between waves (default 1h)
 
 # Sippy search terms per topology
 sippy_filter_for() {
@@ -18,6 +21,17 @@ sippy_filter_for() {
         sno) echo "-4vcpu" ;;
         *)   echo "" ;;
     esac
+}
+
+human_duration() {
+    local secs="$1"
+    if (( secs >= 3600 && secs % 3600 == 0 )); then
+        echo "${secs}s ($((secs / 3600))h)"
+    elif (( secs >= 60 && secs % 60 == 0 )); then
+        echo "${secs}s ($((secs / 60))m)"
+    else
+        echo "${secs}s"
+    fi
 }
 
 to_image() {
@@ -62,6 +76,11 @@ usage() {
     echo "  --refresh           Update job files from Sippy and exit (auto-detects release from existing jobs)"
     echo "  --job <selector>    Launch specific jobs: all, number (3), list (3,7,12), or pattern (recovery)"
     echo "  --relaunch-failed   Re-launch failed jobs from the latest run"
+    echo "  --stagger <secs>    Delay between each job launch (default: 10s API throttle only)"
+    echo "  --wave-size <N>     Group into waves of N jobs, pause between waves"
+    echo "  --wave-delay <secs> Seconds between waves (default: 3600 = 1 hour)"
+    echo "                      --stagger and --wave-size can be combined: stagger"
+    echo "                      applies within a wave, wave-delay applies between waves"
     echo "  --initial <version> Set RELEASE_IMAGE_INITIAL — required for z-stream and y-stream upgrade jobs"
     echo "  --run <name>        Custom run directory name (defaults to YYYY-MM-DD)"
     echo "  --dry-run           Print what would be launched without calling gangway-cli"
@@ -76,6 +95,17 @@ usage() {
     echo "  $0 tnf 4.22.0-rc.0 --job recovery            # launch all jobs matching 'recovery'"
     echo "  $0 tna 4.22.0-rc.0 --initial 4.21.0 --job all  # launch all jobs including upgrades"
     echo "  $0 tnf 4.22.0-rc.1 --relaunch-failed         # re-launch failures from latest run"
+    # Spread jobs 10 minutes apart (like a mini-Prow cron stagger):
+    echo "  $0 tnf 5.0.0-rc.0 --job all --stagger 600"
+
+    # Launch in waves of 8, with 1h between waves:
+    echo "  $0 tnf 5.0.0-rc.0 --job all --wave-size 8"
+
+    # Waves of 10, 45 minutes between:
+    echo "  $0 tnf 5.0.0-rc.0 --job all --wave-size 10 --wave-delay 2700"
+
+    # Original behavior (unchanged):
+    echo "  $0 tnf 5.0.0-rc.0 --job all"
     echo ""
     echo "When --initial is provided, z-stream and y-stream upgrade jobs are included."
     echo "Without --initial, upgrade jobs are skipped."
@@ -129,6 +159,24 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             JOB_FILTER="$2"; shift 2 ;;
+        --stagger)
+            if [[ -z "${2:-}" || ! "${2:-}" =~ ^(0|[1-9][0-9]*)$ ]]; then
+                echo "Error: --stagger must be a non-negative decimal integer"
+                exit 1
+            fi
+            STAGGER="$2"; shift 2 ;;
+        --wave-size)
+            if [[ -z "${2:-}" || ! "${2:-}" =~ ^(0|[1-9][0-9]*)$ ]]; then
+                echo "Error: --wave-size must be a non-negative decimal integer"
+                exit 1
+            fi
+            WAVE_SIZE="$2"; shift 2 ;;
+        --wave-delay)
+            if [[ -z "${2:-}" || ! "${2:-}" =~ ^(0|[1-9][0-9]*)$ ]]; then
+                echo "Error: --wave-delay must be a non-negative decimal integer"
+                exit 1
+            fi
+            WAVE_DELAY="$2"; shift 2 ;;
         --list)    LIST_ONLY=true; shift ;;
         --refresh) REFRESH=true; shift ;;
         --relaunch-failed) RELAUNCH_FAILED=true; shift ;;
@@ -324,7 +372,7 @@ if $RELAUNCH_FAILED; then
 
         if [[ "$prev_url" != "no-url" && "$prev_url" != "null" ]]; then
             prev_gcs="${prev_url/prow.ci.openshift.org\/view\/gs\//${GCSWEB_BASE}/}"
-            prev_result=$(curl -s --max-time 10 "${prev_gcs}/finished.json" 2>/dev/null \
+            prev_result=$(curl -sL --max-time 10 "${prev_gcs}/finished.json" 2>/dev/null \
                 | jq -r '.result // "unknown"' 2>/dev/null || echo "unknown")
             if [[ "$prev_result" == "FAILURE" || "$prev_result" == "ABORTED" ]]; then
                 prev_num=0
@@ -401,8 +449,53 @@ if [[ -n "$JOB_FILTER" && "$JOB_FILTER" != "all" ]]; then
     fi
 fi
 
+# A job at a given line number passes the --job filter
+job_selected() {
+    local job="$1" line_num="$2"
+    if [[ -n "$SELECTED_NUMS" ]] && [[ "$SELECTED_NUMS" != *",$line_num,"* ]]; then
+        return 1
+    fi
+    if [[ -n "$JOB_PATTERN" ]] && [[ "$job" != *"$JOB_PATTERN"* ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Count jobs that will actually be attempted, so wave pacing can skip the
+# pause after the final launch instead of waiting for a wave that never comes
+count_selected_jobs() {
+    local file="$1"
+    [[ ! -f "$file" || ! -s "$file" ]] && return
+    while IFS= read -r job; do
+        [[ -z "$job" ]] && continue
+        LINE_NUM=$((LINE_NUM + 1))
+        if job_selected "$job" "$LINE_NUM"; then
+            TOTAL_SELECTED=$((TOTAL_SELECTED + 1))
+        fi
+    done < "$file"
+}
+
+TOTAL_SELECTED=0
+count_selected_jobs "$JOB_FILE"
+if [[ -n "${INITIAL_IMAGE:-}" ]]; then
+    count_selected_jobs "$JOB_FILE_Z"
+    count_selected_jobs "$JOB_FILE_Y"
+fi
+LINE_NUM=0
+LAUNCHED_COUNT=0
+
 echo "=== Launching $TOPOLOGY jobs against $RELEASE_IMAGE ==="
 echo "    Run directory: $RUN_DIR"
+if (( WAVE_SIZE > 0 )); then
+    echo "    Pacing: waves of $WAVE_SIZE, $(human_duration "$WAVE_DELAY") between waves"
+    if (( STAGGER > 0 )); then
+        echo "            $(human_duration "$STAGGER") between jobs within a wave"
+    fi
+elif (( STAGGER > 0 )); then
+    echo "    Pacing: $(human_duration "$STAGGER") between jobs"
+else
+    echo "    Pacing: $(human_duration "$DELAY") between jobs (default)"
+fi
 echo ""
 
 # Launch jobs from a single file
@@ -417,12 +510,7 @@ launch_from_file() {
         [[ -z "$JOB" ]] && continue
         LINE_NUM=$((LINE_NUM + 1))
 
-        if [[ -n "$SELECTED_NUMS" ]] && [[ "$SELECTED_NUMS" != *",$LINE_NUM,"* ]]; then
-            continue
-        fi
-        if [[ -n "$JOB_PATTERN" ]] && [[ "$JOB" != *"$JOB_PATTERN"* ]]; then
-            continue
-        fi
+        job_selected "$JOB" "$LINE_NUM" || continue
 
         COUNT=$((COUNT + 1))
         echo "[$COUNT] $JOB"
@@ -437,7 +525,23 @@ launch_from_file() {
                 --job-name "$JOB" \
                 --jobs-file-path="$RUN_DIR" 2>&1); then
                 echo "  launched"
-                sleep "$DELAY"
+                LAUNCHED_COUNT=$((LAUNCHED_COUNT + 1))
+                # Wave batching: pause between waves, but not after the last selected job
+                # Split the WAVE_SIZE>0 guard into its own (( )) so the modulo below is
+                # never evaluated when WAVE_SIZE=0 — bash 3.2 (macOS default) emits a
+                # "division by 0" warning if both are combined in a single (( && )).
+                if (( WAVE_SIZE > 0 )) && (( LAUNCHED_COUNT % WAVE_SIZE == 0 && COUNT < TOTAL_SELECTED )); then
+                    echo ""
+                    echo "  >>> Wave complete ($LAUNCHED_COUNT launched). Waiting ${WAVE_DELAY}s for leases to free..."
+                    sleep "$WAVE_DELAY"
+                    echo "  >>> Resuming launches"
+                    echo ""
+                elif (( STAGGER > 0 )); then
+                    echo "  waiting ${STAGGER}s (stagger)..."
+                    sleep "$STAGGER"
+                else
+                    sleep "$DELAY"
+                fi
             else
                 if echo "$GANGWAY_OUTPUT" | grep -q "500 Internal Server Error"; then
                     echo "  SKIPPED — job not found in Prow (HTTP 500). Remove from job file or run --refresh."
