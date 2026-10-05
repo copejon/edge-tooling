@@ -19,7 +19,7 @@ run_composite_check = _mod.run_composite_check
 is_story_done = _mod.is_story_done
 
 
-def _story(key="OCPEDGE-1", assignee="alice@redhat.com", sp=5, epic_key="EPIC-1",
+def _story(key="OCPEDGE-1", assignee="alice@example.com", sp=5, epic_key="EPIC-1",
            status="To Do", issue_type="Story", display="Alice", priority="Major"):
     return {
         "key": key, "summary": f"Story {key}", "type": issue_type, "status": status,
@@ -96,38 +96,43 @@ class TestDataQualityGate(unittest.TestCase):
 
 class TestCapacityCheck(unittest.TestCase):
     def test_over_capacity(self):
-        stories = [_story("S-1", "alice@x.com", sp=20)]
+        stories = [_story("S-1", "alice@example.com", sp=20)]
         f = _feature(all_stories=stories)
         gate = [{"feature_key": f["key"], "status": "PASS"}]
-        roster = _roster(("alice@x.com", "Alice", 8))
+        roster = _roster(("alice@example.com", "Alice", 8))
         result = run_capacity_check([f], gate, roster, 2)
         assert result[0]["status"] == "OVER"
         assert result[0]["overrun"] == 4
 
     def test_under_capacity(self):
-        stories = [_story("S-1", "alice@x.com", sp=5)]
+        stories = [_story("S-1", "alice@example.com", sp=5)]
         f = _feature(all_stories=stories)
         gate = [{"feature_key": f["key"], "status": "PASS"}]
-        roster = _roster(("alice@x.com", "Alice", 8))
+        roster = _roster(("alice@example.com", "Alice", 8))
         result = run_capacity_check([f], gate, roster, 2)
         assert result[0]["status"] == "OK"
 
     def test_excludes_fail_features(self):
-        stories = [_story("S-1", "alice@x.com", sp=100)]
+        stories = [_story("S-1", "alice@example.com", sp=100)]
         f = _feature(all_stories=stories)
         gate = [{"feature_key": f["key"], "status": "FAIL"}]
-        roster = _roster(("alice@x.com", "Alice", 8))
+        roster = _roster(("alice@example.com", "Alice", 8))
         result = run_capacity_check([f], gate, roster, 2)
-        assert len(result) == 0
+        # Roster members always appear so capacity covers the whole team; the
+        # FAIL feature's stories must not count.
+        assert len(result) == 1
+        assert result[0]["person"] == "alice@example.com"
+        assert result[0]["assigned_sp"] == 0
+        assert result[0]["remaining_capacity"] == 16
 
     def test_excludes_bugs_from_sp(self):
         stories = [
-            _story("S-1", "alice@x.com", sp=5),
-            _story("B-1", "alice@x.com", sp=0, issue_type="Bug"),
+            _story("S-1", "alice@example.com", sp=5),
+            _story("B-1", "alice@example.com", sp=0, issue_type="Bug"),
         ]
         f = _feature(all_stories=stories)
         gate = [{"feature_key": f["key"], "status": "PASS"}]
-        roster = _roster(("alice@x.com", "Alice", 8))
+        roster = _roster(("alice@example.com", "Alice", 8))
         result = run_capacity_check([f], gate, roster, 2)
         assert result[0]["assigned_sp"] == 5
 
@@ -142,29 +147,29 @@ class TestCapacityCheck(unittest.TestCase):
 
 class TestTimelineCheck(unittest.TestCase):
     def test_on_track(self):
-        stories = [_story("S-1", "alice@x.com", sp=8)]
+        stories = [_story("S-1", "alice@example.com", sp=8)]
         f = _feature(all_stories=stories)
         gate = [{"feature_key": f["key"], "status": "PASS"}]
-        roster = _roster(("alice@x.com", "Alice", 8))
+        roster = _roster(("alice@example.com", "Alice", 8))
         result = run_timeline_check([f], gate, roster, 3)
         assert result[0]["risk"] == "OK"
 
     def test_behind_schedule(self):
-        stories = [_story("S-1", "alice@x.com", sp=30)]
+        stories = [_story("S-1", "alice@example.com", sp=30)]
         f = _feature(all_stories=stories)
         gate = [{"feature_key": f["key"], "status": "PASS"}]
-        roster = _roster(("alice@x.com", "Alice", 8))
+        roster = _roster(("alice@example.com", "Alice", 8))
         result = run_timeline_check([f], gate, roster, 1)
         assert result[0]["risk"] == "HIGH"
         assert result[0]["gap"] > 0
 
     def test_proportional_velocity(self):
-        s1 = _story("S-1", "alice@x.com", sp=10, epic_key="E-1")
-        s2 = _story("S-2", "alice@x.com", sp=10, epic_key="E-2")
+        s1 = _story("S-1", "alice@example.com", sp=10, epic_key="E-1")
+        s2 = _story("S-2", "alice@example.com", sp=10, epic_key="E-2")
         f1 = _feature("F-1", all_stories=[s1])
         f2 = _feature("F-2", all_stories=[s2])
         gate = [{"feature_key": "F-1", "status": "PASS"}, {"feature_key": "F-2", "status": "PASS"}]
-        roster = _roster(("alice@x.com", "Alice", 8))
+        roster = _roster(("alice@example.com", "Alice", 8))
         result = run_timeline_check([f1, f2], gate, roster, 3)
         assert result[0]["velocity_per_sprint"] == 4.0
         assert result[1]["velocity_per_sprint"] == 4.0
@@ -177,23 +182,23 @@ class TestTimelineCheck(unittest.TestCase):
         assert result[0]["risk"] == "NO_CONTRIBUTORS"
 
     def test_zero_remaining_sprints(self):
-        stories = [_story("S-1", "alice@x.com", sp=10)]
+        stories = [_story("S-1", "alice@example.com", sp=10)]
         f = _feature(all_stories=stories)
         gate = [{"feature_key": f["key"], "status": "PASS"}]
-        roster = _roster(("alice@x.com", "Alice", 8))
+        roster = _roster(("alice@example.com", "Alice", 8))
         result = run_timeline_check([f], gate, roster, 0)
         assert result[0]["risk"] == "HIGH"
 
 
 class TestAssignmentCheck(unittest.TestCase):
     def test_spof_detected(self):
-        stories = [_story("S-1", "alice@x.com"), _story("S-2", "alice@x.com")]
+        stories = [_story("S-1", "alice@example.com"), _story("S-2", "alice@example.com")]
         f = _feature(all_stories=stories)
         result = run_assignment_check([f])
         assert len(result["spof"]) == 1
 
     def test_no_spof_with_multiple_contributors(self):
-        stories = [_story("S-1", "alice@x.com"), _story("S-2", "bob@x.com")]
+        stories = [_story("S-1", "alice@example.com"), _story("S-2", "bob@x.com")]
         f = _feature(all_stories=stories)
         result = run_assignment_check([f])
         assert len(result["spof"]) == 0
@@ -207,7 +212,7 @@ class TestAssignmentCheck(unittest.TestCase):
 
     def test_bugs_excluded_from_spof(self):
         stories = [
-            _story("S-1", "alice@x.com", sp=5),
+            _story("S-1", "alice@example.com", sp=5),
             _story("B-1", "bot@x.com", sp=0, issue_type="Bug"),
         ]
         f = _feature(all_stories=stories)
@@ -223,15 +228,16 @@ class TestAssignmentCheck(unittest.TestCase):
 
 class TestCompositeCheck(unittest.TestCase):
     def _run(self, features, gate_status="PASS", timeline_risk="OK", capacity_over=False,
-             has_spof=False, has_unassigned=False, has_sizing=False):
+             has_spof=False, has_unassigned=False, has_sizing=False, count_sizing=False):
         gate = [{"feature_key": f["key"], "status": gate_status} for f in features]
-        capacity = [{"person": "alice@x.com", "status": "OVER" if capacity_over else "OK"}] if capacity_over else []
+        capacity = [{"person": "alice@example.com", "status": "OVER"}] if capacity_over else []
         timeline = [{"feature_key": f["key"], "risk": timeline_risk} for f in features]
         spof = [{"feature_key": feat["key"], "sole_contributor": "alice"} for feat in features] if has_spof else []
         unassigned_list = [{"feature_key": feat["key"], "count": 1, "sp": 5} for feat in features] if has_unassigned else []
         assignment = {"spof": spof, "unassigned": unassigned_list}
-        sizing = [{"feature_key": feat["key"]} for feat in features] if has_sizing else []
-        return run_composite_check(features, gate, capacity, timeline, assignment, sizing)
+        sizing = [{"feature_key": feat["key"], "assessment": "Undersized"} for feat in features] if has_sizing else []
+        return run_composite_check(features, gate, capacity, timeline, assignment, sizing,
+                                   count_sizing=count_sizing)
 
     def test_low_no_signals(self):
         f = _feature(all_stories=[_story()])
@@ -240,13 +246,25 @@ class TestCompositeCheck(unittest.TestCase):
 
     def test_medium_two_signals(self):
         f = _feature(all_stories=[_story()])
-        result = self._run([f], has_spof=True, has_sizing=True)
+        result = self._run([f], has_spof=True, capacity_over=True)
         assert result[0]["composite_risk"] == "MEDIUM"
 
     def test_high_three_signals(self):
         f = _feature(all_stories=[_story()])
-        result = self._run([f], timeline_risk="HIGH", has_spof=True, has_sizing=True)
+        result = self._run([f], timeline_risk="HIGH", has_spof=True, capacity_over=True)
         assert result[0]["composite_risk"] == "HIGH"
+
+    def test_sizing_shown_but_not_counted_by_default(self):
+        f = _feature(all_stories=[_story()])
+        result = self._run([f], has_spof=True, has_sizing=True)
+        assert result[0]["sizing"] == "Undersized"
+        assert result[0]["signal_count"] == 1
+        assert result[0]["composite_risk"] == "LOW"
+
+    def test_sizing_counted_when_opted_in(self):
+        f = _feature(all_stories=[_story()])
+        result = self._run([f], has_spof=True, has_sizing=True, count_sizing=True)
+        assert result[0]["signal_count"] == 2
 
     def test_spof_and_unassigned_merged_as_one_signal(self):
         f = _feature(all_stories=[_story()])
@@ -256,7 +274,7 @@ class TestCompositeCheck(unittest.TestCase):
 
     def test_data_quality_fail_counts_as_signal(self):
         f = _feature(all_stories=[_story()])
-        result = self._run([f], gate_status="FAIL", has_sizing=True)
+        result = self._run([f], gate_status="FAIL", has_spof=True)
         assert result[0]["signal_count"] == 2
         assert result[0]["composite_risk"] == "MEDIUM"
 
@@ -266,8 +284,10 @@ class TestCompositeCheck(unittest.TestCase):
         gate = [{"feature_key": "F-1", "status": "PASS"}, {"feature_key": "F-2", "status": "PASS"}]
         capacity = []
         timeline = [{"feature_key": "F-1", "risk": "OK"}, {"feature_key": "F-2", "risk": "HIGH"}]
-        assignment = {"spof": [{"feature_key": "F-2", "sole_contributor": "a"}], "unassigned": []}
-        sizing = [{"feature_key": "F-2"}]
+        assignment = {"spof": [{"feature_key": "F-2", "sole_contributor": "a"}],
+                      "unassigned": [{"feature_key": "F-2", "count": 1, "sp": 0}]}
+        capacity = [{"person": "alice@example.com", "status": "OVER"}]
+        sizing = [{"feature_key": "F-2", "assessment": "Undersized"}]
         result = run_composite_check([f1, f2], gate, capacity, timeline, assignment, sizing)
         assert result[0]["feature_key"] == "F-2"
         assert result[0]["composite_risk"] == "HIGH"
@@ -397,7 +417,7 @@ class TestBugLoadCheck(unittest.TestCase):
         assert len(result["unassigned_blocker_critical"]) == 1
 
     def test_assigned_blocker_not_flagged(self):
-        result = run_bug_load_check([self._bug(assignee="alice@x.com")], [], "none")
+        result = run_bug_load_check([self._bug(assignee="alice@example.com")], [], "none")
         assert len(result["unassigned_blocker_critical"]) == 0
 
     def test_major_not_flagged(self):
@@ -446,7 +466,7 @@ class TestCompositeCheckBugSignal(unittest.TestCase):
         assert result[0]["signal_count"] == 1
 
     def test_no_bug_signal_when_bugs_assigned(self):
-        bug_story = _story("OCPBUGS-1", assignee="alice@x.com", sp=0, issue_type="Bug", priority="Blocker")
+        bug_story = _story("OCPBUGS-1", assignee="alice@example.com", sp=0, issue_type="Bug", priority="Blocker")
         f = _feature(all_stories=[_story("S-1"), bug_story])
         gate = [{"feature_key": f["key"], "status": "PASS"}]
         result = run_composite_check(

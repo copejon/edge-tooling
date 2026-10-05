@@ -8,7 +8,11 @@ argument-hint: "<version> <sprint-range> bc:<branch-cut> [pd:<pencils-down>] [--
 
 # Release Planning Risk Assessment
 
-You are orchestrating a release planning risk assessment for the OCPEDGE team. Data fetching runs inline using MCP tools and transform scripts. Analysis (data-quality gate + 6 checks) is delegated to a sub-agent.
+You are orchestrating a release planning risk assessment for the OCPEDGE team. Data fetching runs inline using MCP tools and transform scripts. Checks are deterministic (`run-checks.py`); only the narrative is delegated to a sub-agent.
+
+The report is decision-oriented: verdict → decisions → cut line → people over target → dormant scope → process gaps → how the numbers were computed → appendix. Every figure is computed in `run-checks.py` and its formula is recorded in `checks.json` (`method` block) so the report can show how each conclusion was reached. The full method is in `plugins/edge-scrum/references/release-planning-method.md`.
+
+**Scope handling (new):** features in `New` status with no evidence of work (no epics, no stories, or no story in progress / done / in a release sprint / updated in the last 30 days) are classified **dormant** and pulled out of the risk math — they are a scope decision for PM, not a risk. Epics that are `Dev Complete`/`Closed` or target another release are excluded from scope and listed in the report. Capacity counts every roster member; assignees missing from the roster are flagged as roster drift.
 
 > **Before proceeding**: Read `plugins/edge-scrum/references/Edge-Scrum-Laws.md` to find which law files apply to release planning orchestration. For this skill, load: `laws/00-team-roster.md`, `laws/01-jira-projects.md`, `laws/03-jira-bugs.md`, `laws/04-jira-epics.md`, `laws/05-jira-features.md`, `laws/06-jira-fields.md`, `laws/09-sprint-policies.md`, `laws/14-agent-conventions.md`. The configuration below is derived from the Laws — when in doubt, defer to the law files.
 
@@ -46,15 +50,15 @@ components:
 
 1. **Steps 0–1**: Load laws/roster, gather release parameters (main context)
 2. **Phase 2**: Fetch sprints + features inline using MCP tools → transform scripts (main context)
-3. **Phase 3**: Fetch epics + spikes inline using MCP tools → transform scripts (main context)
+3. **Phase 3**: Fetch epics inline using MCP tools → transform scripts (main context)
 4. **Phase 4**: Fetch stories + bugs inline using MCP tools → transform scripts (main context)
 5. **Phase 5a**: Run `run-checks.py` — deterministic data-quality gate + 6 checks → `checks.json`
 6. **Phase 5b**: Delegate narrative to sub-agent — reads `checks.json`, writes `recommendations.json`
-7. **Step 6**: Run `assemble-report.py` — produces both `.md` and `.docx` from structured data
+7. **Step 6**: Run `assemble-report.py` — produces `.md` from structured data
 
 **Rules:**
 
-- Data fetching uses MCP tools directly in the main context
+- Data fetching uses MCP tools directly in the main context. Requires the standard `mcp-atlassian` plugin MCP server; if its tools are unavailable, stop and tell the user to enable it
 - MCP responses are large and get persisted to files automatically — note those file paths
 - Transform scripts (`plugins/edge-scrum/bin/`) convert raw MCP data to structured JSON
 - Use `check-page.py` to extract pagination info from persisted files
@@ -145,17 +149,25 @@ Record `WORKDIR` — substitute it into all agent prompts.
 
 ### Phase 2: Sprint + Feature Collection (inline)
 
-Identical to release-health Phase 2 (standard mode JQL only).
+Like release-health Phase 2 (standard mode JQL only), except planning skips the
+closed-sprint fetch — see 2a.
 
 #### 2a — Fetch Sprints
 
-Call `jira_get_sprints_from_board` for board_id `"11479"` three times:
+Call `jira_get_sprints_from_board` for board_id `"11479"` twice:
 
 - `state="active"`
-- `state="closed"` — paginate using `page_token`; use `limit=50`
 - `state="future"`
 
-After all pages are fetched, note all persisted file paths and run:
+Do **not** fetch `state="closed"`. The planning pipeline never reads closed-sprint data:
+`run-checks.py` takes `--remaining-sprints` as a number, and every sprint-derived figure
+(`remaining_sprint_count`, the active/dormant release-window check) is computed from active +
+future sprints or from sprint numbers on the stories themselves. The board returns closed
+sprints oldest-first across the full history (hundreds of sprints, many pages), so fetching
+them costs a large amount of context for no effect on the report. (Release-health, which does
+use closed sprints for its refinement checks, keeps its own closed-sprint fetch.)
+
+After both calls, note all persisted file paths and run:
 
 ```bash
 python3 plugins/edge-scrum/bin/transform-sprints.py \
@@ -172,8 +184,10 @@ python3 plugins/edge-scrum/bin/transform-sprints.py \
 Call `jira_search` with:
 
 - **JQL:** `project = OCPSTRAT AND issuetype in (Feature, Initiative) AND labels in ("ocpedge-plan", "microshift") AND "Target Version" = "openshift-{VERSION}" AND (resolution is EMPTY OR resolution not in (Duplicate, Obsolete)) ORDER BY Rank ASC`
-- **Fields:** `key, summary, status, issuetype, priority, assignee, fixVersions, labels, description, issuelinks, customfield_10795, customfield_10470, customfield_10473, customfield_10475`
+- **Fields:** `key, summary, status, issuetype, priority, assignee, fixVersions, labels, description, issuelinks, customfield_10795, customfield_10855, customfield_10470, customfield_10473, customfield_10475`
 - **limit:** `50`
+
+Keep the pages in fetch order: the JQL sorts by Rank and `transform-features.py` persists the position as `rank`, which the report's cut line relies on.
 
 Paginate using `page_token`. If zero results, use fallback JQL (set `fallback_used`):
 
@@ -200,9 +214,10 @@ Read and check:
 
 ---
 
-### Phase 3: Epic + Spike Collection (inline)
+### Phase 3: Epic Collection (inline)
 
-Identical to release-health Phase 3.
+Like release-health Phase 3, except planning does not fetch spikes — they feed only the
+release-health refinement checks, not the planning report.
 
 #### 3a — Fetch Epics
 
@@ -211,8 +226,10 @@ Read `{WORKDIR}/features.json`. Extract `feature_keys_csv`.
 If `feature_keys` has more than 50 entries, split into batches of 50. For each batch, call `jira_search`:
 
 - **JQL:** `project in (OCPEDGE, USHIFT) AND "Parent Link" in ({feature_keys_batch_csv}) ORDER BY Rank ASC`
-- **Fields:** `key, summary, status, assignee, labels, description, parent, customfield_10028, customfield_10018, customfield_10470, customfield_10473, customfield_10475`
+- **Fields:** `key, summary, status, assignee, labels, description, parent, updated, fixVersions, customfield_10028, customfield_10795, customfield_10855, customfield_10018, customfield_10470, customfield_10473, customfield_10475`
 - **limit:** `50`
+
+`customfield_10795` is the epic's T-shirt size (law 04); `customfield_10855` (Target Version) and `fixVersions` let `run-checks.py` exclude epics that belong to another release.
 
 Paginate using `page_token`. After all pages fetched, run:
 
@@ -222,28 +239,7 @@ python3 plugins/edge-scrum/bin/transform-epics.py \
   --output {WORKDIR}/epics.json
 ```
 
-#### 3b — Fetch Spikes
-
-Read `{WORKDIR}/sprints.json`. Extract `refinement_sprint_id`.
-
-Call `jira_search`:
-
-- **JQL:** `project in (OCPEDGE, USHIFT) AND issuetype = Spike AND sprint = {refinement_sprint_id}`
-- **Fields:** `key, summary, status, assignee, issuelinks`
-- **limit:** `50`
-
-Paginate using `page_token`. After all pages fetched, run:
-
-```bash
-python3 plugins/edge-scrum/bin/transform-spikes.py \
-  --input <all_persisted_file_paths> \
-  --features-file {WORKDIR}/features.json \
-  --epics-file {WORKDIR}/epics.json \
-  --sprints-file {WORKDIR}/sprints.json \
-  --output {WORKDIR}/spikes.json
-```
-
-#### 3c — Verify
+#### 3b — Verify
 
 Read `{WORKDIR}/epics.json` and verify: `epic_keys` is a non-empty array, `feature_to_epics` is an object, and `epics` is an array. If any check fails, warn the user with a descriptive error and stop.
 
@@ -260,8 +256,10 @@ Read `{WORKDIR}/epics.json`. Extract `epic_keys`.
 Split epic keys into batches of 20. For each batch, call `jira_search`:
 
 - **JQL:** `project in (OCPEDGE, USHIFT, OCPBUGS) AND parent in ({epic_keys_batch_csv}) ORDER BY priority ASC`
-- **Fields:** `key, summary, status, issuetype, priority, assignee, labels, updated, parent, customfield_10028, customfield_10021, issuelinks`
+- **Fields:** `key, summary, status, issuetype, priority, assignee, labels, updated, parent, customfield_10028, customfield_10021, customfield_10020, issuelinks`
 - **limit:** `50`
+
+`customfield_10020` is the Sprint field; together with `updated` it is the evidence used to tell an active `New` feature from a dormant one.
 
 Paginate using `page_token`. After all pages fetched, note all persisted file paths and run:
 
@@ -317,7 +315,7 @@ For small responses that fit in context (not persisted), write them to `{WORKDIR
 
 ### Phase 5a: Run Checks (deterministic)
 
-Run the planning risk checks script. This performs the data-quality gate and all 6 checks deterministically — no LLM needed:
+Run the planning risk checks script. This classifies features active/dormant, filters scope, performs the data-quality gate, all checks, the cut line and the hidden-scope estimate deterministically — no LLM needed:
 
 ```bash
 python3 plugins/edge-scrum/bin/run-checks.py \
@@ -328,24 +326,34 @@ python3 plugins/edge-scrum/bin/run-checks.py \
   --roster plugins/edge-scrum/.roster.json \
   --remaining-sprints {REMAINING_SPRINT_COUNT} \
   --component-filter "{COMPONENT_FILTER}" \
+  --version {VERSION} \
+  --today {TODAY} \
+  --first-sprint {FIRST} \
+  --pencils-down {PENCILS_DOWN} \
+  --focus-priorities Blocker,Critical,Major \
+  --include-lower-when Refinement \
   --output {WORKDIR}/checks.json
 ```
 
-Verify `{WORKDIR}/checks.json` was written and contains a `meta` key.
+Lower-priority features are excluded from all figures and listed in the appendix; adjust the two flags to widen or narrow focus.
+
+Verify `{WORKDIR}/checks.json` was written and contains `meta` and `method` keys.
+
+**Roster drift check.** Read `checks.json` → `process_gaps.roster_drift`. If it is non-empty, tell the user which assignees carry work but are not in `.roster.json`, with their SP, and ask (via `AskUserQuestion`) whether to add them to the roster and re-run, or continue with them counted as scope but not capacity. Do not silently continue: every capacity figure depends on this.
 
 ### Phase 5b: Recommendations (sub-agent)
 
 Read `plugins/edge-scrum/skills/release-planning-analysis/SKILL.md`. Substitute `{WORKDIR}` and `{VERSION}`, then spawn as a sub-agent.
 
-This agent reads `checks.json` (pre-computed numbers) and writes `{WORKDIR}/recommendations.json` with narrative recommendations. It does NOT compute any numbers — only interprets and advises.
+This agent reads `checks.json` (pre-computed numbers) and writes `{WORKDIR}/recommendations.json` with a headline, up to five decisions, and narrative. It does NOT compute any numbers — only interprets and advises.
 
-Verify `{WORKDIR}/recommendations.json` was written and contains `executive_summary`.
+Verify `{WORKDIR}/recommendations.json` was written and contains `headline` and `decisions`.
 
 ---
 
 ### Step 6: Assemble Report (main context)
 
-Run the report assembly script. This renders both markdown and DOCX from structured data — no markdown parsing needed:
+Run the report assembly script. This renders Markdown from structured data — no markdown parsing needed:
 
 ```bash
 python3 plugins/edge-scrum/bin/assemble-report.py \
@@ -359,10 +367,13 @@ python3 plugins/edge-scrum/bin/assemble-report.py \
   --pencils-down {PENCILS_DOWN} \
   --remaining-sprints {REMAINING_SPRINT_COUNT} \
   --total-dev-sprints {TOTAL_DEV_SPRINTS} \
+  --strict \
   --output .reports/release_planning_{VERSION}_{TODAY}
 ```
 
-This produces both `.reports/release_planning_{VERSION}_{TODAY}.md` and `.reports/release_planning_{VERSION}_{TODAY}.docx` with styled tables, risk-level coloring, and Jira hyperlinks.
+This produces `.reports/release_planning_{VERSION}_{TODAY}.md`. Rendering for other channels (chai-bot, browser, Word) is handled downstream from the Markdown.
+
+`--strict` makes assembly fail if `recommendations.json` breaks the writing rules (pre-built links, gendered pronouns, unknown feature keys, more than five decisions). If it fails, re-spawn the analysis agent with the reported problems and assemble again.
 
 Clean up: `test -n "{WORKDIR}" && [[ "{WORKDIR}" == /tmp/release-planning-* ]] && rm -rf -- "{WORKDIR}"`
 
@@ -371,8 +382,11 @@ Clean up: `test -n "{WORKDIR}" && [[ "{WORKDIR}" == /tmp/release-planning-* ]] &
 ## Edge Cases
 
 - **No Features found**: Try fallback JQL (handled in Phase 2b); warn user to confirm scope; stop if still empty.
-- **Feature with no Epics**: Flagged by data-quality gate as FAIL — "no epics created."
-- **Epic with no Stories**: Flagged by data-quality gate as FAIL — "epic has no stories."
+- **Feature in New with no evidence of work**: Classified dormant; listed under "Scope nobody has started" with the reason; excluded from all risk math.
+- **Active feature with no Epics**: Flagged by data-quality gate as FAIL — "no epics created."
+- **Active feature whose epics have no Stories**: Flagged by data-quality gate as FAIL — "epics have no stories."
+- **Epic that is Dev Complete/Closed or targets another release**: Excluded from scope; listed in the appendix with its open SP.
+- **Assignee not in `.roster.json`**: Work counts as scope, capacity is zero; reported as roster drift and the user is asked before continuing.
 - **Component filter matches no features**: Warn user and exit cleanly — "No features found for component {COMPONENT_FILTER}."
 - **stories.json empty**: Data-quality gate flags all features as FAIL — no numeric projections possible.
 - **bugs.json empty**: Bug load check reports no issues — not an error.
@@ -390,3 +404,4 @@ Clean up: `test -n "{WORKDIR}" && [[ "{WORKDIR}" == /tmp/release-planning-* ]] &
 - **Work directory**: `{WORKDIR}` persists across phases within a run. Rerunning on the same day overwrites prior files.
 - **Laws files**: Authoritative for all team conventions. Never hardcode roster, rules, or sizing in skill definitions.
 - **Data-quality gate**: MUST run before capacity and timeline checks. Features without story-level breakdown are excluded from numeric projections.
+- **Method transparency**: `checks.json` → `method` records formula, inputs and result for every headline figure and the report renders it verbatim. Thresholds are named constants in `run-checks.py` and documented in `references/release-planning-method.md`; change both together.
