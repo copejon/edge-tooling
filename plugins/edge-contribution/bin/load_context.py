@@ -46,8 +46,6 @@ class Member:
     name: str
     github: str
     role: str
-    location: str
-    kerberos: str
     jira_username: str
 
 
@@ -100,8 +98,6 @@ def _member_from_cells(cells: List[str]) -> Member:
         name=name_match.group("name").strip(),
         github=cells[1],
         role=cells[2],
-        location=cells[3],
-        kerberos=kerberos,
         jira_username=f"{kerberos}@redhat.com",
     )
 

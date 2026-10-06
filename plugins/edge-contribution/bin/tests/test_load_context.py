@@ -10,6 +10,7 @@ Engineer" contain "Engineer" but must be excluded).
 """
 
 import base64
+import dataclasses
 import json
 import os
 import sys
@@ -70,6 +71,22 @@ def _ok(stdout):
 def _contents_response(markdown, encoding="base64", encoder=base64.b64encode):
     content = encoder(markdown.encode("utf-8")).decode("ascii")
     return _ok(json.dumps({"content": content, "encoding": encoding}))
+class TestMemberDataclass(unittest.TestCase):
+    def test_member_has_only_required_fields(self):
+        """Member dataclass should only have name, github, role, jira_username."""
+        member = load_context.Member(
+            name="Test User",
+            github="testuser",
+            role="Software Engineer",
+            jira_username="testuser@redhat.com"
+        )
+        fields = {f.name for f in dataclasses.fields(member)}
+        assert fields == {"name", "github", "role", "jira_username"}
+        # Explicitly verify removed fields don't exist
+        assert not hasattr(member, "location")
+        assert not hasattr(member, "kerberos")
+
+
 class TestParseRosterFailureInputs(unittest.TestCase):
     def test_row_with_wrong_column_count_raises(self):
         markdown = WELL_FORMED_ROSTER + "| [X](https://rover.redhat.com/people/profile/x) | gh |\n"
