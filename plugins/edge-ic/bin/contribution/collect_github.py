@@ -1,1 +1,0 @@
-../../../edge-contribution/bin/collect_github.py
