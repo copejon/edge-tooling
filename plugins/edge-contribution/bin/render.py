@@ -32,8 +32,8 @@ from typing import Dict, List, Optional, Tuple
 from metrics import AllocationSignals, ContributionMatrix, TeamMetrics, compute_allocation_signals
 
 # Canonical order of activity kinds for IC output columns.
-# No "comment" kind: collect_jira does not gather comments, because Jira Cloud
-# omits comment author emails and the query could never match a member.
+# No "comment" kind: Jira comments are not collected because Jira Cloud
+# omits comment author emails and queries could never match a member.
 ACTIVITY_KINDS: List[str] = [
     "assignee",
     "qa",

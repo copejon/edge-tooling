@@ -2,7 +2,7 @@
 """Pure attribution for Jira issues collected via MCP tools.
 
 Takes raw Jira issues (collected by Claude via mcp__mcp-atlassian__jira_search)
-and applies the same attribution chain as collect_jira.py:
+and applies the standard attribution chain:
 
 1. Issue's own components → workstream
 2. Parent epic's component (via pre-resolved map)
@@ -210,7 +210,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         activities.extend(issue_to_activities(issue, member, kind, base_url, parent_workstreams))
 
-    # Write activities with envelope (same format as collect_jira.py)
+    # Write activities with standard envelope format
     payload = activity_payload([asdict(activity) for activity in activities])
     with open(args.output, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)
