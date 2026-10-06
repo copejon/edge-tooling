@@ -6,6 +6,7 @@ allowed-tools:
   - Read
   - Write
   - AskUserQuestion
+  - mcp__mcp-atlassian__jira_search
 user-invocable: true
 ---
 
