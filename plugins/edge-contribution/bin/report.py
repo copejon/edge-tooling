@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Tuple
 from hashlib import sha256
 
 import _common
-from collect_jira import UNATTRIBUTED_PARENT_EMPTY, _ACTIVITY_PROJECTS
+from _common import ACTIVITY_PROJECTS, UNATTRIBUTED_PARENT_EMPTY
 from metrics import ContributionMatrix, compute_allocation_signals, compute_team_metrics
 from render import (
     ACTIVITY_KINDS,
@@ -455,7 +455,7 @@ def build_executive_summary(
         per_member=per_member,
         per_workstream=per_workstream,
         total_records=len(activities),
-        jira_projects=_ACTIVITY_PROJECTS,
+        jira_projects=ACTIVITY_PROJECTS,
         ocpstrat_project="OCPSTRAT",
         allowed_org_count=len(_ALLOWED_ORGS),
         out_of_window_records=out_of_window_count,

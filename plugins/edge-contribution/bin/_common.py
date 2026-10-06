@@ -15,7 +15,22 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
+
+# --- Jira collection constants ----------------------------------------------
+
+# Custom field IDs
+QA_CONTACT_FIELD = "customfield_10470"
+SME_FIELD = "customfield_10475"
+
+# Projects searched for assignee and QA-contact activity
+ACTIVITY_PROJECTS: Tuple[str, ...] = ("OCPEDGE", "USHIFT", "OCPBUGS")
+
+# Unattributed reasons (different problems require different fixes)
+UNATTRIBUTED_NO_PARENT = "no_component_no_parent"
+UNATTRIBUTED_PARENT_EMPTY = "parent_also_empty"
+
+# --- HTTP transport constants -----------------------------------------------
 
 _DEFAULT_BASE_URL = "https://redhat.atlassian.net"
 _SEARCH_PATH = "/rest/api/3/search/jql"

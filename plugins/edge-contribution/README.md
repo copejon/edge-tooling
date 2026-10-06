@@ -79,8 +79,8 @@ The skills orchestrate standalone scripts under `bin/`. You can run them by hand
 python3 bin/load_context.py --output roster.json
 
 # 2. collect activity for the window
-python3 bin/collect_jira.py   --members-file roster.json --quarter 2026Q2 \
-  --output jira_activity.json
+# Jira collection now happens via MCP tools in skills (see references/pipeline.md)
+# For manual runs, you would need to query via MCP and run attribute_jira_activities.py
 python3 bin/collect_github.py --members-file roster.json --quarter 2026Q2 \
   --output github_activity.json
 
@@ -140,8 +140,7 @@ different question (SME/assignee on strategic items, cf 10475).
 **Comments are deliberately not collected.** Jira Cloud omits `emailAddress`
 from comment authors, so matching a roster member by email could never fire —
 the query returned zero records while scanning every issue in the project once
-per member. Pinned by `TestCommentCollectionIsGone` in `test_collect_jira.py`.
-Re-adding it requires matching on `accountId`, not email.
+per member. Re-adding it requires matching on `accountId`, not email.
 
 1. Issue's own `components` field → workstream acronym (e.g., "SNO" → SNO)
 2. Parent epic's component (batched lookup via `key in (...)` JQL)
@@ -214,19 +213,22 @@ Two deliberate exclusions (restored with `--include-all` on the `heatmap` skill)
 ## Architecture
 
 ```text
-workstream_map.py   internal SNO/TNA/TNF/LVMS/USHIFT/TOPO ↔ Jira component map
-load_context.py     edge-context roster (fetched via gh) → roster.json (Eng/QE)
-collect_jira.py     Jira REST → jira_activity.json      (assignee/QA/ocpstrat)
-collect_github.py   gh api graphql (batched) → github_activity.json (pr_authored/pr_reviewed)
-report.py           activity + roster → contribution matrix → metrics → render
-metrics.py          matrix → workstreams touched / team means / allocation signals
-render.py           report → text | markdown
-_common.py          Jira config/auth, HTTP client (pagination/retry), date helpers
+workstream_map.py            internal SNO/TNA/TNF/LVMS/USHIFT/TOPO ↔ Jira component map
+load_context.py              edge-context roster (fetched via gh) → roster.json (Eng/QE)
+Skills + MCP                 mcp__mcp-atlassian__jira_search → raw_jira_issues.json
+attribute_jira_activities.py raw Jira issues → jira_activity.json (assignee/QA/ocpstrat)
+collect_github.py            gh api graphql (batched) → github_activity.json (pr_authored/pr_reviewed)
+report.py                    activity + roster → contribution matrix → metrics → render
+metrics.py                   matrix → workstreams touched / team means / allocation signals
+render.py                    report → text | markdown
+_common.py                   Shared constants, activity payload, date helpers
 ```
 
-`workstream_map`, `load_context`, `metrics`, `render`, and `report` are pure and
-side-effect-free; all Jira/GitHub/filesystem I/O is isolated in the collectors
-and `_common.py`, with the HTTP and `gh` layers injected so tests stay hermetic.
+`workstream_map`, `load_context`, `attribute_jira_activities`, `metrics`, `render`,
+and `report` are pure and side-effect-free. Jira queries are orchestrated by skills
+via MCP tools (`mcp__mcp-atlassian__jira_search`); attribution logic is pure Python.
+GitHub I/O is isolated in `collect_github.py` with the `gh` layer injected so tests
+stay hermetic.
 GitHub queries use batched GraphQL (aliased searches, 6 members per request) to
 stay well under the 5000 points/hour budget; body-level `RATE_LIMITED` errors
 are detected structurally and retried with bounded exponential backoff. If a

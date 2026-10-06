@@ -57,14 +57,12 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Dict, List, Optional
 
-from _common import activity_payload
+from _common import (
+    UNATTRIBUTED_NO_PARENT,
+    UNATTRIBUTED_PARENT_EMPTY,
+    activity_payload,
+)
 from workstream_map import component_to_workstream, project_to_workstream
-
-# Why an issue ended up unattributed. These are different problems with different
-# fixes, so the data-quality report separates them: the first needs a component on
-# the ticket itself, the second needs one on the epic above it.
-UNATTRIBUTED_NO_PARENT = "no_component_no_parent"
-UNATTRIBUTED_PARENT_EMPTY = "parent_also_empty"
 
 
 @dataclass(frozen=True)
