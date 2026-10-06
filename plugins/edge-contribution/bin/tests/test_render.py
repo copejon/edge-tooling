@@ -1389,5 +1389,59 @@ class TestSummaryRefactored(unittest.TestCase):
         assert "could not be placed" in text.lower() or "unattributed" in text.lower()
 
 
+class TestUnifiedSummaryRendering(unittest.TestCase):
+    """Test the unified rendering functions with format parameter."""
+
+    def _minimal_summary(self):
+        """Create a minimal ExecutiveSummary for testing."""
+        return render.ExecutiveSummary(
+            period_label="2026Q3",
+            window=("2026-07-01", "2026-09-30"),
+            metrics=metrics.TeamMetrics(
+                workstreams=SIX,
+                members=["alice", "bob"],
+                workstreams_touched_by_member={},
+                mean_people_per_workstream=2.5,
+                mean_workstreams_per_person=3.0,
+                active_member_count=2,
+                total_member_count=2,
+            ),
+            signals=metrics.AllocationSignals(
+                total_by_member={},
+                total_by_workstream={},
+                contributors_by_workstream={},
+                team_median_total=10.0,
+                grid_max=0,
+                over_allocated=set(),
+                under_allocated=set(),
+                narrow=set(),
+            ),
+            data_quality=render.DataQuality(excluded_members=[]),
+            counts_by_source_kind={},
+            counts_by_attribution={},
+            per_member=[],
+            per_workstream=[],
+            total_records=0,
+            jira_projects=("OCPEDGE",),
+            ocpstrat_project="OCPSTRAT",
+            allowed_org_count=10,
+        )
+
+    def test_summary_header_text_format(self):
+        """_summary_header should produce text format when format='text'."""
+        summary = self._minimal_summary()
+        lines = render._summary_header(summary, format="text")
+        assert isinstance(lines, list)
+        assert "OCP-Edge Cross-Workstream Contribution" in lines[0]
+        assert not lines[0].startswith("#")  # No markdown heading
+
+    def test_summary_header_markdown_format(self):
+        """_summary_header should produce markdown format when format='markdown'."""
+        summary = self._minimal_summary()
+        lines = render._summary_header(summary, format="markdown")
+        assert isinstance(lines, list)
+        assert lines[0].startswith("# OCP-Edge")  # Markdown H1 heading
+
+
 if __name__ == "__main__":
     unittest.main()

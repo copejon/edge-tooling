@@ -496,96 +496,192 @@ def _compute_attribution_percentages(summary: ExecutiveSummary) -> Dict[str, int
     return percentages
 
 
-def _summary_header_text(summary: ExecutiveSummary) -> List[str]:
-    """Render the title and window lines."""
+def _summary_header(summary: ExecutiveSummary, format: str = "text") -> List[str]:
+    """Render the title and window lines.
+
+    Args:
+        summary: The executive summary data.
+        format: Output format - "text" or "markdown".
+
+    Returns:
+        List of formatted lines.
+    """
     lines = []
-    lines.append(f"OCP-Edge Cross-Workstream Contribution — {summary.period_label}")
-    if summary.window:
-        from_date, to_date = summary.window
-        included = summary.metrics.total_member_count
-        excluded = len(summary.data_quality.excluded_members)
-        full = included + excluded
-        if excluded > 0:
-            roster_line = f"Window {from_date} .. {to_date}        Roster {included} of {full} ({excluded} excluded)"
-        else:
-            roster_line = f"Window {from_date} .. {to_date}        Roster {included} of {full}"
-        lines.append(roster_line)
+
+    if format == "markdown":
+        lines.append(f"# OCP-Edge Cross-Workstream Contribution — {summary.period_label}")
+        lines.append("")
+
+        if summary.window:
+            from_date, to_date = summary.window
+            included = summary.metrics.total_member_count
+            excluded = len(summary.data_quality.excluded_members)
+            full = included + excluded
+            lines.append(f"**Window:** {from_date} .. {to_date}")
+            if excluded > 0:
+                lines.append(f"**Roster:** {included} of {full} ({excluded} excluded)")
+            else:
+                lines.append(f"**Roster:** {included} of {full}")
+            lines.append("")
+    else:  # text format
+        lines.append(f"OCP-Edge Cross-Workstream Contribution — {summary.period_label}")
+        if summary.window:
+            from_date, to_date = summary.window
+            included = summary.metrics.total_member_count
+            excluded = len(summary.data_quality.excluded_members)
+            full = included + excluded
+            if excluded > 0:
+                roster_line = f"Window {from_date} .. {to_date}        Roster {included} of {full} ({excluded} excluded)"
+            else:
+                roster_line = f"Window {from_date} .. {to_date}        Roster {included} of {full}"
+            lines.append(roster_line)
+
     return lines
 
 
-def _summary_team_text(summary: ExecutiveSummary) -> List[str]:
-    """Render the TEAM section."""
+def _summary_team(summary: ExecutiveSummary, format: str = "text") -> List[str]:
+    """Render the TEAM section.
+
+    Args:
+        summary: The executive summary data.
+        format: Output format - "text" or "markdown".
+
+    Returns:
+        List of formatted lines.
+    """
     from workstream_map import workstream_acronyms
 
     lines = []
-    lines.append("TEAM")
-
-    # Total activity records across the roster (not the same as total_touches,
-    # which counts member x workstream pairs rather than records).
     total_activity = sum(ml.total for ml in summary.per_member)
     median = int(summary.signals.team_median_total)
-    lines.append(f"  {total_activity} contributions        median {median} per person")
-
     people_per_ws = summary.metrics.mean_people_per_workstream
     num_workstreams = len(workstream_acronyms())
-    lines.append(f"  {people_per_ws:.1f} people per workstream (mean of {num_workstreams})")
-
     ws_per_person = summary.metrics.mean_workstreams_per_person
     active_count = summary.metrics.active_member_count
-    lines.append(f"   {ws_per_person:.1f} workstreams per person ({active_count} active)")
+
+    if format == "markdown":
+        lines.append("## Team")
+        lines.append("")
+        lines.append(f"- **{total_activity} contributions** — median {median} per person")
+        lines.append(f"- **{people_per_ws:.1f} people per workstream** (mean of {num_workstreams})")
+        lines.append(f"- **{ws_per_person:.1f} workstreams per person** ({active_count} active)")
+        lines.append("")
+    else:  # text format
+        lines.append("TEAM")
+        lines.append(f"  {total_activity} contributions        median {median} per person")
+        lines.append(f"  {people_per_ws:.1f} people per workstream (mean of {num_workstreams})")
+        lines.append(f"   {ws_per_person:.1f} workstreams per person ({active_count} active)")
 
     return lines
 
 
-def _summary_workstreams_text(summary: ExecutiveSummary) -> List[str]:
-    """Render the WORKSTREAMS table."""
+def _summary_workstreams(summary: ExecutiveSummary, format: str = "text") -> List[str]:
+    """Render the WORKSTREAMS table.
+
+    Args:
+        summary: The executive summary data.
+        format: Output format - "text" or "markdown".
+
+    Returns:
+        List of formatted lines.
+    """
     lines = []
-    lines.append("")
-    lines.append("WORKSTREAMS                     volume   people   largest contributor")
 
-    for ws_line in summary.per_workstream:
-        volume_str = f"{ws_line.volume:>6d}"
-        people_str = f"{ws_line.contributors:>6d}"
+    if format == "markdown":
+        lines.append("## Workstreams")
+        lines.append("")
+        lines.append("| Workstream | Volume | People | Largest Contributor | Share |")
+        lines.append("|------------|--------|--------|---------------------|-------|")
 
-        if ws_line.top_contributor:
-            contrib_str = f"{ws_line.top_contributor:28s}  {ws_line.top_share:3d}%"
-        else:
-            contrib_str = ""
+        for ws_line in summary.per_workstream:
+            if ws_line.top_contributor:
+                lines.append(
+                    f"| {ws_line.workstream} | {ws_line.volume} | {ws_line.contributors} | "
+                    f"{ws_line.top_contributor} | {ws_line.top_share}% |"
+                )
+            else:
+                lines.append(
+                    f"| {ws_line.workstream} | {ws_line.volume} | {ws_line.contributors} | | |"
+                )
+        lines.append("")
+    else:  # text format
+        lines.append("")
+        lines.append("WORKSTREAMS                     volume   people   largest contributor")
 
-        lines.append(
-            f"  {ws_line.workstream:30s}  {volume_str:>6s}  {people_str:>6s}   {contrib_str}"
-        )
+        for ws_line in summary.per_workstream:
+            volume_str = f"{ws_line.volume:>6d}"
+            people_str = f"{ws_line.contributors:>6d}"
+
+            if ws_line.top_contributor:
+                contrib_str = f"{ws_line.top_contributor:28s}  {ws_line.top_share:3d}%"
+            else:
+                contrib_str = ""
+
+            lines.append(
+                f"  {ws_line.workstream:30s}  {volume_str:>6s}  {people_str:>6s}   {contrib_str}"
+            )
 
     return lines
 
 
-def _summary_people_text(summary: ExecutiveSummary) -> List[str]:
-    """Render the PEOPLE table."""
+def _summary_people(summary: ExecutiveSummary, format: str = "text") -> List[str]:
+    """Render the PEOPLE table.
+
+    Args:
+        summary: The executive summary data.
+        format: Output format - "text" or "markdown".
+
+    Returns:
+        List of formatted lines.
+    """
     lines = []
-    lines.append("")
-    lines.append("PEOPLE                           total  touched   largest workstream")
 
-    for member_line in summary.per_member:
-        total_str = f"{member_line.total:>5d}"
-        touched_str = f"{member_line.workstreams_touched} of 6"
+    if format == "markdown":
+        lines.append("## People")
+        lines.append("")
+        lines.append("| Member | Total | Workstreams Touched | Largest Workstream | Share |")
+        lines.append("|--------|-------|---------------------|-------------------|-------|")
 
-        if member_line.top_workstream:
-            ws_str = f"{member_line.top_workstream:8s}  {member_line.top_share:3d}%"
-        else:
-            ws_str = ""
+        for member_line in summary.per_member:
+            touched_str = f"{member_line.workstreams_touched} of 6"
+            if member_line.top_workstream:
+                lines.append(
+                    f"| {member_line.member} | {member_line.total} | {touched_str} | "
+                    f"{member_line.top_workstream} | {member_line.top_share}% |"
+                )
+            else:
+                lines.append(f"| {member_line.member} | {member_line.total} | {touched_str} | | |")
+        lines.append("")
+    else:  # text format
+        lines.append("")
+        lines.append("PEOPLE                           total  touched   largest workstream")
 
-        lines.append(f"  {member_line.member:32s}  {total_str:>5s}   {touched_str:7s}   {ws_str}")
+        for member_line in summary.per_member:
+            total_str = f"{member_line.total:>5d}"
+            touched_str = f"{member_line.workstreams_touched} of 6"
+
+            if member_line.top_workstream:
+                ws_str = f"{member_line.top_workstream:8s}  {member_line.top_share:3d}%"
+            else:
+                ws_str = ""
+
+            lines.append(f"  {member_line.member:32s}  {total_str:>5s}   {touched_str:7s}   {ws_str}")
 
     return lines
 
 
-def _summary_data_health_text(summary: ExecutiveSummary) -> List[str]:
-    """Render the DATA HEALTH section."""
-    lines = []
-    lines.append("")
-    lines.append("DATA HEALTH")
+def _summary_data_health(summary: ExecutiveSummary, format: str = "text") -> List[str]:
+    """Render the DATA HEALTH section.
 
-    # Count unattributed items
+    Args:
+        summary: The executive summary data.
+        format: Output format - "text" or "markdown".
+
+    Returns:
+        List of formatted lines.
+    """
+    lines = []
+
     unattributed_total = summary.counts_by_attribution.get("", 0)
     total_records = summary.total_records
     if total_records > 0:
@@ -593,73 +689,121 @@ def _summary_data_health_text(summary: ExecutiveSummary) -> List[str]:
     else:
         pct = 0
 
-    lines.append(
-        f"  {unattributed_total} of {total_records} records ({pct}%) could not be placed in a workstream."
-    )
-
-    # Break down by category
     jira_no_comp = summary.data_quality.tickets_no_component_no_parent
     jira_parent_empty = summary.data_quality.tickets_parent_also_empty
     pr_count = sum(summary.data_quality.unattributed_by_repo.values())
 
-    lines.append(
-        f"    {jira_no_comp + jira_parent_empty} Jira tickets   {jira_no_comp} missing a component, {jira_parent_empty} whose epic is also empty"
-    )
-    lines.append(f"    {pr_count} PRs            repos not mapped to a workstream")
+    if format == "markdown":
+        lines.append("## Data Health")
+        lines.append("")
+        lines.append(
+            f"**{unattributed_total} of {total_records} records ({pct}%)** could not be placed in a workstream."
+        )
+        lines.append("")
+        lines.append(
+            f"- **{jira_no_comp + jira_parent_empty} Jira tickets** — {jira_no_comp} missing a component, {jira_parent_empty} whose epic is also empty"
+        )
+        lines.append(f"- **{pr_count} PRs** — repos not mapped to a workstream")
+        lines.append("")
+    else:  # text format
+        lines.append("")
+        lines.append("DATA HEALTH")
+        lines.append(
+            f"  {unattributed_total} of {total_records} records ({pct}%) could not be placed in a workstream."
+        )
+        lines.append(
+            f"    {jira_no_comp + jira_parent_empty} Jira tickets   {jira_no_comp} missing a component, {jira_parent_empty} whose epic is also empty"
+        )
+        lines.append(f"    {pr_count} PRs            repos not mapped to a workstream")
 
     return lines
 
 
-def _summary_what_counted_text(summary: ExecutiveSummary) -> List[str]:
-    """Render the WHAT WAS COUNTED section (--show-sources only)."""
-    lines = []
-    lines.append("")
-    lines.append(f"WHAT WAS COUNTED  {summary.total_records} records")
+def _summary_what_counted(summary: ExecutiveSummary, format: str = "text") -> List[str]:
+    """Render the WHAT WAS COUNTED section (--show-sources only).
 
+    Args:
+        summary: The executive summary data.
+        format: Output format - "text" or "markdown".
+
+    Returns:
+        List of formatted lines.
+    """
+    lines = []
     jira_counts = summary.counts_by_source_kind.get("jira", {})
     github_counts = summary.counts_by_source_kind.get("github", {})
 
-    if jira_counts:
-        jira_total = sum(jira_counts.values())
-        jira_detail = " · ".join(
-            f"{kind} {jira_counts[kind]}" for kind in ACTIVITY_KINDS if kind in jira_counts
-        )
-        lines.append(f"  Jira     {jira_total:4d}   {jira_detail}")
-        jira_projects_str = ", ".join(summary.jira_projects)
-        lines.append(f"                 projects {jira_projects_str} (assignee + QA contact)")
-        if summary.ocpstrat_project:
-            lines.append(f"                 plus {summary.ocpstrat_project} (SME / assignee roles)")
-        lines.append("                 comments are not collected — Jira Cloud hides author emails")
-
-    if github_counts:
-        github_total = sum(github_counts.values())
-        github_detail = " · ".join(
-            f"{kind} {github_counts[kind]}" for kind in ACTIVITY_KINDS if kind in github_counts
-        )
-        lines.append(f"  GitHub  {github_total:5d}   {github_detail}")
-        lines.append(
-            f"                 any repo whose owner is in the org allowlist ({summary.allowed_org_count} orgs)"
-        )
-        lines.append("                 authored = PR created in the window")
-        lines.append(
-            "                 reviewed = PR updated in the window (GitHub cannot search by review date)"
-        )
-        lines.append("                 every record is timestamped with the PR's creation date")
-        if summary.out_of_window_records > 0:
-            lines.append(
-                f"                 {summary.out_of_window_records} records carry a date before the window but are still counted"
-            )
-            lines.append("                 → do not filter activities.csv by the ts column")
+    if format == "markdown":
+        lines.append("## What Was Counted")
+        lines.append("")
+        if jira_counts or github_counts:
+            lines.append("| Source | Total | Details |")
+            lines.append("|--------|-------|---------|")
+            if jira_counts:
+                jira_total = sum(jira_counts.values())
+                jira_detail = " · ".join(f"{kind} {jira_counts[kind]}" for kind in ACTIVITY_KINDS if kind in jira_counts)
+                lines.append(f"| Jira | {jira_total} | {jira_detail} |")
+            if github_counts:
+                github_total = sum(github_counts.values())
+                github_detail = " · ".join(f"{kind} {github_counts[kind]}" for kind in ACTIVITY_KINDS if kind in github_counts)
+                lines.append(f"| GitHub | {github_total} | {github_detail} |")
+            lines.append("")
+        if jira_counts:
+            jira_projects_str = ", ".join(summary.jira_projects)
+            lines.append(f"**Jira projects:** {jira_projects_str} (assignee + QA contact)")
+            if summary.ocpstrat_project:
+                lines.append(f" plus {summary.ocpstrat_project} (SME / assignee roles)")
+            lines.append("")
+            lines.append("*Comments are not collected — Jira Cloud hides author emails*")
+            lines.append("")
+        if github_counts:
+            lines.append(f"**GitHub:** any repo whose owner is in the org allowlist ({summary.allowed_org_count} orgs)")
+            lines.append("")
+            lines.append("- **authored** = PR created in the window")
+            lines.append("- **reviewed** = PR updated in the window (GitHub cannot search by review date)")
+            lines.append("- every record is timestamped with the PR's creation date")
+            if summary.out_of_window_records > 0:
+                lines.append(f"- **{summary.out_of_window_records} records** carry a date before the window but are still counted")
+                lines.append("- → do not filter activities.csv by the ts column")
+            lines.append("")
+    else:  # text
+        lines.append("")
+        lines.append(f"WHAT WAS COUNTED  {summary.total_records} records")
+        if jira_counts:
+            jira_total = sum(jira_counts.values())
+            jira_detail = " · ".join(f"{kind} {jira_counts[kind]}" for kind in ACTIVITY_KINDS if kind in jira_counts)
+            lines.append(f"  Jira     {jira_total:4d}   {jira_detail}")
+            jira_projects_str = ", ".join(summary.jira_projects)
+            lines.append(f"                 projects {jira_projects_str} (assignee + QA contact)")
+            if summary.ocpstrat_project:
+                lines.append(f"                 plus {summary.ocpstrat_project} (SME / assignee roles)")
+            lines.append("                 comments are not collected — Jira Cloud hides author emails")
+        if github_counts:
+            github_total = sum(github_counts.values())
+            github_detail = " · ".join(f"{kind} {github_counts[kind]}" for kind in ACTIVITY_KINDS if kind in github_counts)
+            lines.append(f"  GitHub  {github_total:5d}   {github_detail}")
+            lines.append(f"                 any repo whose owner is in the org allowlist ({summary.allowed_org_count} orgs)")
+            lines.append("                 authored = PR created in the window")
+            lines.append("                 reviewed = PR updated in the window (GitHub cannot search by review date)")
+            lines.append("                 every record is timestamped with the PR's creation date")
+            if summary.out_of_window_records > 0:
+                lines.append(f"                 {summary.out_of_window_records} records carry a date before the window but are still counted")
+                lines.append("                 → do not filter activities.csv by the ts column")
 
     return lines
 
 
-def _summary_how_attributed_text(summary: ExecutiveSummary) -> List[str]:
-    """Render the HOW EACH ITEM WAS ATTRIBUTED section (--show-sources only)."""
-    lines = []
-    lines.append("")
-    lines.append("HOW EACH ITEM WAS ATTRIBUTED   first hit wins")
+def _summary_how_attributed(summary: ExecutiveSummary, format: str = "text") -> List[str]:
+    """Render the HOW EACH ITEM WAS ATTRIBUTED section (--show-sources only).
 
+    Args:
+        summary: The executive summary data.
+        format: Output format - "text" or "markdown".
+
+    Returns:
+        List of formatted lines.
+    """
+    lines = []
     percentages = _compute_attribution_percentages(summary)
     named_sources = [
         (source, count) for source, count in summary.counts_by_attribution.items() if source
@@ -667,99 +811,200 @@ def _summary_how_attributed_text(summary: ExecutiveSummary) -> List[str]:
     named_sources.sort(key=lambda pair: pair[1], reverse=True)
     unattributed_count = summary.counts_by_attribution.get("", 0)
 
-    for source, count in named_sources:
-        pct = percentages.get(source, 0)
-        desc = _attribution_description(source)
-        if source in ("component", "repo", "project"):
-            article = "the "
-        elif source == "shared":
-            article = "a "
-        else:
-            article = ""
-        lines.append(f"  {source:12s} {count:4d} {pct:3d}%   {article}{desc}")
-
-    if unattributed_count > 0:
-        pct = percentages.get("", 0)
+    if format == "markdown":
+        lines.append("## How Each Item Was Attributed")
+        lines.append("")
+        lines.append("**First hit wins**")
+        lines.append("")
+        lines.append("| Source | Count | % | Description |")
+        lines.append("|--------|-------|---|-------------|")
+        for source, count in named_sources:
+            pct = percentages.get(source, 0)
+            desc = _attribution_description(source)
+            lines.append(f"| {source} | {count} | {pct}% | {desc} |")
+        if unattributed_count > 0:
+            pct = percentages.get("", 0)
+            lines.append(
+                f"| unattributed | {unattributed_count} | {pct}% | none of the above matched — see EXCLUDED |"
+            )
+        lines.append("")
         lines.append(
-            f"  unattributed {unattributed_count:4d} {pct:3d}%   none of the above matched — see EXCLUDED"
+            '*A PR that names a Jira key is resolved through the Jira chain, so it is reported as component / parent / project, not as a separate "jira key" rule.*'
         )
-
-    lines.append("")
-    lines.append("  A PR that names a Jira key is resolved through the Jira chain, so it is")
-    lines.append('  reported as component / parent / project, not as a separate "jira key" rule.')
+        lines.append("")
+    else:  # text
+        lines.append("")
+        lines.append("HOW EACH ITEM WAS ATTRIBUTED   first hit wins")
+        for source, count in named_sources:
+            pct = percentages.get(source, 0)
+            desc = _attribution_description(source)
+            if source in ("component", "repo", "project"):
+                article = "the "
+            elif source == "shared":
+                article = "a "
+            else:
+                article = ""
+            lines.append(f"  {source:12s} {count:4d} {pct:3d}%   {article}{desc}")
+        if unattributed_count > 0:
+            pct = percentages.get("", 0)
+            lines.append(
+                f"  unattributed {unattributed_count:4d} {pct:3d}%   none of the above matched — see EXCLUDED"
+            )
+        lines.append("")
+        lines.append("  A PR that names a Jira key is resolved through the Jira chain, so it is")
+        lines.append('  reported as component / parent / project, not as a separate "jira key" rule.')
 
     return lines
 
 
-def _summary_what_excluded_text(summary: ExecutiveSummary) -> List[str]:
-    """Render the WHAT WAS EXCLUDED section (--show-sources only)."""
+def _summary_what_excluded(summary: ExecutiveSummary, format: str = "text") -> List[str]:
+    """Render the WHAT WAS EXCLUDED section (--show-sources only).
+
+    Args:
+        summary: The executive summary data.
+        format: Output format - "text" or "markdown".
+
+    Returns:
+        List of formatted lines.
+    """
     lines = []
-    lines.append("")
-    lines.append("WHAT WAS EXCLUDED")
-
-    # Excluded members
-    if summary.data_quality.excluded_members:
-        count = len(summary.data_quality.excluded_members)
-        members_str = ", ".join(summary.data_quality.excluded_members)
-        lines.append(f"  {count} roster members    {members_str}")
-        lines.append("                      managers by role title, not IC contributors.")
-        lines.append("                      --include-all puts them back.")
-
-    # Excluded PRs
-    if summary.data_quality.excluded_personal_repo_prs > 0:
-        lines.append(
-            f"  {summary.data_quality.excluded_personal_repo_prs} PRs              personal-namespace repos, dropped before counting"
-        )
-        if summary.data_quality.excluded_personal_repos:
-            top_repos, more_repos, more_prs = _top_repos(
-                summary.data_quality.excluded_personal_repos
-            )
-            repo_lines = []
-            for repo, count in top_repos:
-                repo_lines.append(f"{repo} {count}")
-            lines.append(f"                      {' · '.join(repo_lines)}")
-            if more_repos:
-                lines.append(f"                      and {more_repos} more repos ({more_prs} PRs)")
-        lines.append(
-            "                      The org allowlist is hand-kept — a real org missing from"
-        )
-        lines.append("                      it lands in this list looking like a side project.")
-
-    # Unattributed items
     unattributed_total = summary.counts_by_attribution.get("", 0)
-    if unattributed_total > 0:
-        lines.append(
-            f"  {unattributed_total} items           could not be attributed to any workstream"
-        )
 
-        # Unattributed PRs by repo
-        if summary.data_quality.unattributed_by_repo:
-            pr_count = sum(summary.data_quality.unattributed_by_repo.values())
-            lines.append(f"                      {pr_count:3d}  PRs, by repo:")
-            top_repos, more_repos, more_prs = _top_repos(summary.data_quality.unattributed_by_repo)
-            for repo, count in top_repos:
-                note = _repo_note(repo)
-                lines.append(f"                             {repo} {count}{note}")
-            if more_repos:
-                lines.append(
-                    f"                             and {more_repos} more repos ({more_prs} PRs)"
+    if format == "markdown":
+        lines.append("## What Was Excluded")
+        lines.append("")
+
+        # Excluded members
+        if summary.data_quality.excluded_members:
+            count = len(summary.data_quality.excluded_members)
+            members_str = ", ".join(summary.data_quality.excluded_members)
+            lines.append(f"**{count} roster members** — {members_str}")
+            lines.append("")
+            lines.append("*Managers by role title, not IC contributors. `--include-all` puts them back.*")
+            lines.append("")
+
+        # Excluded PRs
+        if summary.data_quality.excluded_personal_repo_prs > 0:
+            lines.append(
+                f"**{summary.data_quality.excluded_personal_repo_prs} PRs** — personal-namespace repos, dropped before counting"
+            )
+            lines.append("")
+            if summary.data_quality.excluded_personal_repos:
+                top_repos, more_repos, more_prs = _top_repos(
+                    summary.data_quality.excluded_personal_repos
                 )
-
-        # Jira tickets with no component and no parent
-        if summary.data_quality.tickets_no_component_no_parent > 0:
-            count = summary.data_quality.tickets_no_component_no_parent
+                for repo, count in top_repos:
+                    lines.append(f"- {repo}: {count}")
+                if more_repos:
+                    lines.append(f"- and {more_repos} more repos ({more_prs} PRs)")
+                lines.append("")
             lines.append(
-                f"                      {count:3d}  Jira tickets with no component and no parent epic"
+                "*The org allowlist is hand-kept — a real org missing from it lands in this list looking like a side project.*"
             )
-            lines.append("                             → fix on the ticket")
+            lines.append("")
 
-        # Jira tickets whose parent epic is also empty
-        if summary.data_quality.tickets_parent_also_empty > 0:
-            count = summary.data_quality.tickets_parent_also_empty
+        # Unattributed items
+        if unattributed_total > 0:
+            lines.append(f"**{unattributed_total} items** — could not be attributed to any workstream")
+            lines.append("")
+
+            # Unattributed PRs by repo
+            if summary.data_quality.unattributed_by_repo:
+                pr_count = sum(summary.data_quality.unattributed_by_repo.values())
+                lines.append(f"**{pr_count} PRs by repo:**")
+                lines.append("")
+                top_repos, more_repos, more_prs = _top_repos(summary.data_quality.unattributed_by_repo)
+                for repo, count in top_repos:
+                    note = _repo_note(repo)
+                    if note:
+                        lines.append(f"- {repo}: {count} {note}")
+                    else:
+                        lines.append(f"- {repo}: {count}")
+                if more_repos:
+                    lines.append(f"- and {more_repos} more repos ({more_prs} PRs)")
+                lines.append("")
+
+            # Jira tickets with no component and no parent
+            if summary.data_quality.tickets_no_component_no_parent > 0:
+                count = summary.data_quality.tickets_no_component_no_parent
+                lines.append(
+                    f"**{count} Jira tickets** with no component and no parent epic → fix on the ticket"
+                )
+                lines.append("")
+
+            # Jira tickets whose parent epic is also empty
+            if summary.data_quality.tickets_parent_also_empty > 0:
+                count = summary.data_quality.tickets_parent_also_empty
+                lines.append(
+                    f"**{count} Jira tickets** whose parent epic is also empty → fix on the epic"
+                )
+                lines.append("")
+    else:  # text
+        lines.append("")
+        lines.append("WHAT WAS EXCLUDED")
+
+        # Excluded members
+        if summary.data_quality.excluded_members:
+            count = len(summary.data_quality.excluded_members)
+            members_str = ", ".join(summary.data_quality.excluded_members)
+            lines.append(f"  {count} roster members    {members_str}")
+            lines.append("                      managers by role title, not IC contributors.")
+            lines.append("                      --include-all puts them back.")
+
+        # Excluded PRs
+        if summary.data_quality.excluded_personal_repo_prs > 0:
             lines.append(
-                f"                       {count:2d}  Jira tickets whose parent epic is also empty"
+                f"  {summary.data_quality.excluded_personal_repo_prs} PRs              personal-namespace repos, dropped before counting"
             )
-            lines.append("                             → fix on the epic")
+            if summary.data_quality.excluded_personal_repos:
+                top_repos, more_repos, more_prs = _top_repos(
+                    summary.data_quality.excluded_personal_repos
+                )
+                repo_lines = []
+                for repo, count in top_repos:
+                    repo_lines.append(f"{repo} {count}")
+                lines.append(f"                      {' · '.join(repo_lines)}")
+                if more_repos:
+                    lines.append(f"                      and {more_repos} more repos ({more_prs} PRs)")
+            lines.append(
+                "                      The org allowlist is hand-kept — a real org missing from"
+            )
+            lines.append("                      it lands in this list looking like a side project.")
+
+        # Unattributed items
+        if unattributed_total > 0:
+            lines.append(
+                f"  {unattributed_total} items           could not be attributed to any workstream"
+            )
+
+            # Unattributed PRs by repo
+            if summary.data_quality.unattributed_by_repo:
+                pr_count = sum(summary.data_quality.unattributed_by_repo.values())
+                lines.append(f"                      {pr_count:3d}  PRs, by repo:")
+                top_repos, more_repos, more_prs = _top_repos(summary.data_quality.unattributed_by_repo)
+                for repo, count in top_repos:
+                    note = _repo_note(repo)
+                    lines.append(f"                             {repo} {count}{note}")
+                if more_repos:
+                    lines.append(
+                        f"                             and {more_repos} more repos ({more_prs} PRs)"
+                    )
+
+            # Jira tickets with no component and no parent
+            if summary.data_quality.tickets_no_component_no_parent > 0:
+                count = summary.data_quality.tickets_no_component_no_parent
+                lines.append(
+                    f"                      {count:3d}  Jira tickets with no component and no parent epic"
+                )
+                lines.append("                             → fix on the ticket")
+
+            # Jira tickets whose parent epic is also empty
+            if summary.data_quality.tickets_parent_also_empty > 0:
+                count = summary.data_quality.tickets_parent_also_empty
+                lines.append(
+                    f"                       {count:2d}  Jira tickets whose parent epic is also empty"
+                )
+                lines.append("                             → fix on the epic")
 
     return lines
 
@@ -769,26 +1014,26 @@ def _summary_text(summary: ExecutiveSummary, show_sources: bool = False) -> str:
     lines = []
 
     # Header
-    lines.extend(_summary_header_text(summary))
+    lines.extend(_summary_header(summary, format="text"))
     lines.append("")
 
     # TEAM section
-    lines.extend(_summary_team_text(summary))
+    lines.extend(_summary_team(summary, format="text"))
 
     # WORKSTREAMS table
-    lines.extend(_summary_workstreams_text(summary))
+    lines.extend(_summary_workstreams(summary, format="text"))
 
     # PEOPLE table
-    lines.extend(_summary_people_text(summary))
+    lines.extend(_summary_people(summary, format="text"))
 
     # DATA HEALTH section
-    lines.extend(_summary_data_health_text(summary))
+    lines.extend(_summary_data_health(summary, format="text"))
 
     # Source-disclosure sections (only if requested)
     if show_sources:
-        lines.extend(_summary_what_counted_text(summary))
-        lines.extend(_summary_how_attributed_text(summary))
-        lines.extend(_summary_what_excluded_text(summary))
+        lines.extend(_summary_what_counted(summary, format="text"))
+        lines.extend(_summary_how_attributed(summary, format="text"))
+        lines.extend(_summary_what_excluded(summary, format="text"))
 
     return "\n".join(lines) + "\n"
 
@@ -805,294 +1050,18 @@ def _attribution_description(source: str) -> str:
     return descriptions.get(source, source)
 
 
-def _summary_header_markdown(summary: ExecutiveSummary) -> List[str]:
-    """Render the title and window lines in markdown."""
-    lines = []
-    lines.append(f"# OCP-Edge Cross-Workstream Contribution — {summary.period_label}")
-    lines.append("")
-
-    if summary.window:
-        from_date, to_date = summary.window
-        included = summary.metrics.total_member_count
-        excluded = len(summary.data_quality.excluded_members)
-        full = included + excluded
-        lines.append(f"**Window:** {from_date} .. {to_date}")
-        if excluded > 0:
-            lines.append(f"**Roster:** {included} of {full} ({excluded} excluded)")
-        else:
-            lines.append(f"**Roster:** {included} of {full}")
-        lines.append("")
-
-    return lines
 
 
-def _summary_team_markdown(summary: ExecutiveSummary) -> List[str]:
-    """Render the TEAM section in markdown."""
-    from workstream_map import workstream_acronyms
-
-    lines = []
-    lines.append("## Team")
-    lines.append("")
-
-    total_activity = sum(ml.total for ml in summary.per_member)
-    median = int(summary.signals.team_median_total)
-    people_per_ws = summary.metrics.mean_people_per_workstream
-    num_workstreams = len(workstream_acronyms())
-    ws_per_person = summary.metrics.mean_workstreams_per_person
-    active_count = summary.metrics.active_member_count
-
-    lines.append(f"- **{total_activity} contributions** — median {median} per person")
-    lines.append(f"- **{people_per_ws:.1f} people per workstream** (mean of {num_workstreams})")
-    lines.append(f"- **{ws_per_person:.1f} workstreams per person** ({active_count} active)")
-    lines.append("")
-
-    return lines
 
 
-def _summary_workstreams_markdown(summary: ExecutiveSummary) -> List[str]:
-    """Render the WORKSTREAMS table in markdown."""
-    lines = []
-    lines.append("## Workstreams")
-    lines.append("")
-    lines.append("| Workstream | Volume | People | Largest Contributor | Share |")
-    lines.append("|------------|--------|--------|---------------------|-------|")
-
-    for ws_line in summary.per_workstream:
-        if ws_line.top_contributor:
-            lines.append(
-                f"| {ws_line.workstream} | {ws_line.volume} | {ws_line.contributors} | "
-                f"{ws_line.top_contributor} | {ws_line.top_share}% |"
-            )
-        else:
-            lines.append(
-                f"| {ws_line.workstream} | {ws_line.volume} | {ws_line.contributors} | | |"
-            )
-
-    lines.append("")
-    return lines
 
 
-def _summary_people_markdown(summary: ExecutiveSummary) -> List[str]:
-    """Render the PEOPLE table in markdown."""
-    lines = []
-    lines.append("## People")
-    lines.append("")
-    lines.append("| Member | Total | Workstreams Touched | Largest Workstream | Share |")
-    lines.append("|--------|-------|---------------------|-------------------|-------|")
-
-    for member_line in summary.per_member:
-        touched_str = f"{member_line.workstreams_touched} of 6"
-        if member_line.top_workstream:
-            lines.append(
-                f"| {member_line.member} | {member_line.total} | {touched_str} | "
-                f"{member_line.top_workstream} | {member_line.top_share}% |"
-            )
-        else:
-            lines.append(f"| {member_line.member} | {member_line.total} | {touched_str} | | |")
-
-    lines.append("")
-    return lines
 
 
-def _summary_data_health_markdown(summary: ExecutiveSummary) -> List[str]:
-    """Render the DATA HEALTH section in markdown."""
-    lines = []
-    lines.append("## Data Health")
-    lines.append("")
-
-    unattributed_total = summary.counts_by_attribution.get("", 0)
-    total_records = summary.total_records
-    if total_records > 0:
-        pct = round(100 * unattributed_total / total_records)
-    else:
-        pct = 0
-
-    lines.append(
-        f"**{unattributed_total} of {total_records} records ({pct}%)** could not be placed in a workstream."
-    )
-    lines.append("")
-
-    jira_no_comp = summary.data_quality.tickets_no_component_no_parent
-    jira_parent_empty = summary.data_quality.tickets_parent_also_empty
-    pr_count = sum(summary.data_quality.unattributed_by_repo.values())
-
-    lines.append(
-        f"- **{jira_no_comp + jira_parent_empty} Jira tickets** — {jira_no_comp} missing a component, {jira_parent_empty} whose epic is also empty"
-    )
-    lines.append(f"- **{pr_count} PRs** — repos not mapped to a workstream")
-    lines.append("")
-
-    return lines
 
 
-def _summary_what_counted_markdown(summary: ExecutiveSummary) -> List[str]:
-    """Render the WHAT WAS COUNTED section in markdown (--show-sources only)."""
-    lines = []
-    lines.append("## What Was Counted")
-    lines.append("")
-
-    jira_counts = summary.counts_by_source_kind.get("jira", {})
-    github_counts = summary.counts_by_source_kind.get("github", {})
-
-    if jira_counts or github_counts:
-        lines.append("| Source | Total | Details |")
-        lines.append("|--------|-------|---------|")
-
-        if jira_counts:
-            jira_total = sum(jira_counts.values())
-            jira_detail = " · ".join(
-                f"{kind} {jira_counts[kind]}" for kind in ACTIVITY_KINDS if kind in jira_counts
-            )
-            lines.append(f"| Jira | {jira_total} | {jira_detail} |")
-
-        if github_counts:
-            github_total = sum(github_counts.values())
-            github_detail = " · ".join(
-                f"{kind} {github_counts[kind]}" for kind in ACTIVITY_KINDS if kind in github_counts
-            )
-            lines.append(f"| GitHub | {github_total} | {github_detail} |")
-        lines.append("")
-
-    if jira_counts:
-        jira_projects_str = ", ".join(summary.jira_projects)
-        lines.append(f"**Jira projects:** {jira_projects_str} (assignee + QA contact)")
-        if summary.ocpstrat_project:
-            lines.append(f" plus {summary.ocpstrat_project} (SME / assignee roles)")
-        lines.append("")
-        lines.append("*Comments are not collected — Jira Cloud hides author emails*")
-        lines.append("")
-
-    if github_counts:
-        lines.append(
-            f"**GitHub:** any repo whose owner is in the org allowlist ({summary.allowed_org_count} orgs)"
-        )
-        lines.append("")
-        lines.append("- **authored** = PR created in the window")
-        lines.append(
-            "- **reviewed** = PR updated in the window (GitHub cannot search by review date)"
-        )
-        lines.append("- every record is timestamped with the PR's creation date")
-        if summary.out_of_window_records > 0:
-            lines.append(
-                f"- **{summary.out_of_window_records} records** carry a date before the window but are still counted"
-            )
-            lines.append("- → do not filter activities.csv by the ts column")
-        lines.append("")
-
-    return lines
 
 
-def _summary_how_attributed_markdown(summary: ExecutiveSummary) -> List[str]:
-    """Render the HOW EACH ITEM WAS ATTRIBUTED section in markdown (--show-sources only)."""
-    lines = []
-    lines.append("## How Each Item Was Attributed")
-    lines.append("")
-    lines.append("**First hit wins**")
-    lines.append("")
-    lines.append("| Source | Count | % | Description |")
-    lines.append("|--------|-------|---|-------------|")
-
-    percentages = _compute_attribution_percentages(summary)
-    named_sources = [
-        (source, count) for source, count in summary.counts_by_attribution.items() if source
-    ]
-    named_sources.sort(key=lambda pair: pair[1], reverse=True)
-    unattributed_count = summary.counts_by_attribution.get("", 0)
-
-    for source, count in named_sources:
-        pct = percentages.get(source, 0)
-        desc = _attribution_description(source)
-        lines.append(f"| {source} | {count} | {pct}% | {desc} |")
-
-    if unattributed_count > 0:
-        pct = percentages.get("", 0)
-        lines.append(
-            f"| unattributed | {unattributed_count} | {pct}% | none of the above matched — see EXCLUDED |"
-        )
-
-    lines.append("")
-    lines.append(
-        '*A PR that names a Jira key is resolved through the Jira chain, so it is reported as component / parent / project, not as a separate "jira key" rule.*'
-    )
-    lines.append("")
-
-    return lines
-
-
-def _summary_what_excluded_markdown(summary: ExecutiveSummary) -> List[str]:
-    """Render the WHAT WAS EXCLUDED section in markdown (--show-sources only)."""
-    lines = []
-    lines.append("## What Was Excluded")
-    lines.append("")
-
-    # Excluded members
-    if summary.data_quality.excluded_members:
-        count = len(summary.data_quality.excluded_members)
-        members_str = ", ".join(summary.data_quality.excluded_members)
-        lines.append(f"**{count} roster members:** {members_str}")
-        lines.append("")
-        lines.append("*Managers by role title, not IC contributors. --include-all puts them back.*")
-        lines.append("")
-
-    # Excluded PRs
-    if summary.data_quality.excluded_personal_repo_prs > 0:
-        lines.append(
-            f"**{summary.data_quality.excluded_personal_repo_prs} PRs** — personal-namespace repos, dropped before counting"
-        )
-        lines.append("")
-        if summary.data_quality.excluded_personal_repos:
-            top_repos, more_repos, more_prs = _top_repos(
-                summary.data_quality.excluded_personal_repos
-            )
-            for repo, count in top_repos:
-                lines.append(f"- {repo}: {count}")
-            if more_repos:
-                lines.append(f"- and {more_repos} more repos ({more_prs} PRs)")
-            lines.append("")
-        lines.append(
-            "*The org allowlist is hand-kept — a real org missing from it lands in this list looking like a side project.*"
-        )
-        lines.append("")
-
-    # Unattributed items
-    unattributed_total = summary.counts_by_attribution.get("", 0)
-    if unattributed_total > 0:
-        lines.append(f"**{unattributed_total} items** — could not be attributed to any workstream")
-        lines.append("")
-
-        # Unattributed PRs by repo
-        if summary.data_quality.unattributed_by_repo:
-            pr_count = sum(summary.data_quality.unattributed_by_repo.values())
-            lines.append(f"**{pr_count} PRs by repo:**")
-            lines.append("")
-            top_repos, more_repos, more_prs = _top_repos(summary.data_quality.unattributed_by_repo)
-            for repo, count in top_repos:
-                note = _repo_note(repo)
-                if note:
-                    lines.append(f"- {repo}: {count} {note}")
-                else:
-                    lines.append(f"- {repo}: {count}")
-            if more_repos:
-                lines.append(f"- and {more_repos} more repos ({more_prs} PRs)")
-            lines.append("")
-
-        # Jira tickets with no component and no parent
-        if summary.data_quality.tickets_no_component_no_parent > 0:
-            count = summary.data_quality.tickets_no_component_no_parent
-            lines.append(
-                f"**{count} Jira tickets** with no component and no parent epic → fix on the ticket"
-            )
-            lines.append("")
-
-        # Jira tickets whose parent epic is also empty
-        if summary.data_quality.tickets_parent_also_empty > 0:
-            count = summary.data_quality.tickets_parent_also_empty
-            lines.append(
-                f"**{count} Jira tickets** whose parent epic is also empty → fix on the epic"
-            )
-            lines.append("")
-
-    return lines
 
 
 def _summary_markdown(summary: ExecutiveSummary, show_sources: bool = False) -> str:
@@ -1100,25 +1069,25 @@ def _summary_markdown(summary: ExecutiveSummary, show_sources: bool = False) -> 
     lines = []
 
     # Header
-    lines.extend(_summary_header_markdown(summary))
+    lines.extend(_summary_header(summary, format="markdown"))
 
     # TEAM section
-    lines.extend(_summary_team_markdown(summary))
+    lines.extend(_summary_team(summary, format="markdown"))
 
     # WORKSTREAMS table
-    lines.extend(_summary_workstreams_markdown(summary))
+    lines.extend(_summary_workstreams(summary, format="markdown"))
 
     # PEOPLE table
-    lines.extend(_summary_people_markdown(summary))
+    lines.extend(_summary_people(summary, format="markdown"))
 
     # DATA HEALTH section
-    lines.extend(_summary_data_health_markdown(summary))
+    lines.extend(_summary_data_health(summary, format="markdown"))
 
     # Source-disclosure sections (only if requested)
     if show_sources:
-        lines.extend(_summary_what_counted_markdown(summary))
-        lines.extend(_summary_how_attributed_markdown(summary))
-        lines.extend(_summary_what_excluded_markdown(summary))
+        lines.extend(_summary_what_counted(summary, format="markdown"))
+        lines.extend(_summary_how_attributed(summary, format="markdown"))
+        lines.extend(_summary_what_excluded(summary, format="markdown"))
 
     return "\n".join(lines) + "\n"
 
