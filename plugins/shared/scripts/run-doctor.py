@@ -17,12 +17,12 @@ import signal
 import subprocess
 import sys
 import tempfile
+import textwrap
 import threading
 import time
-import textwrap
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from urllib import request
+from urllib import parse, request
 
 log = logging.getLogger("doctor")
 
@@ -73,7 +73,10 @@ DOCTOR_SH_TIMEOUT = {
 
 GCS_BUCKET = "test-platform-results-public"
 GCS_PUBLIC_BASE = f"https://storage.googleapis.com/{GCS_BUCKET}"
+GCS_LIST_URL = f"https://storage.googleapis.com/storage/v1/b/{GCS_BUCKET}/o"
 GCS_LOG_PREFIX = "logs"
+MAX_GCS_LIST_PAGES = 50
+MAX_PREDECESSOR_CANDIDATES = 20
 DOCTOR_JOB_NAMES = {
     "microshift": "microshift-ci-doctor",
     "lvm-operator": "lvms-ci-doctor",
@@ -120,48 +123,130 @@ def strip_frontmatter(text):
     return text
 
 
+def _parse_build_id(value):
+    """Return an integer for an ASCII-numeric Prow build ID, or None."""
+    if not isinstance(value, str) or not value.isascii() or not value.isdigit():
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
 def _find_predecessor_url():
     """Return the GCS path of the latest successful earlier run for this Prow job.
 
-    Reads latest-build.txt from GCS (written only when a job finishes) to
-    find the most recent completed build, then verifies it succeeded.
+    Prow updates ``latest-build.txt`` when a build starts, so list the job's
+    build directories instead. Exclude the current and newer build IDs, then
+    inspect earlier candidates newest-first until a successful run is found.
     Rehearsal jobs strip their ``rehearse-NNNNN-`` prefix so they reuse
     predecessors from the periodic job's history.
     """
     current_job_name = os.environ.get("JOB_NAME")
-    if not current_job_name:
-        log.info("Predecessor discovery skipped: JOB_NAME not set")
+    current_build = os.environ.get("BUILD_ID")
+    if not current_job_name or not current_build:
+        missing = [
+            name
+            for name, value in (
+                ("JOB_NAME", current_job_name),
+                ("BUILD_ID", current_build),
+            )
+            if not value
+        ]
+        log.info("Predecessor discovery skipped; missing %s", ", ".join(missing))
+        return None
+    current_build_id = _parse_build_id(current_build)
+    if current_build_id is None:
+        log.info("Predecessor discovery got invalid BUILD_ID: %r", current_build)
         return None
 
     lookup_job = re.sub(r"^rehearse-\d+-", "", current_job_name)
     job_base = f"{GCS_PUBLIC_BASE}/{GCS_LOG_PREFIX}/{lookup_job}"
+    build_ids = set()
+    page_token = None
 
-    try:
-        with request.urlopen(f"{job_base}/latest-build.txt", timeout=15) as resp:
-            latest_bid = resp.read().decode().strip()
-    except (OSError, ValueError) as exc:
-        log.info("Predecessor discovery failed reading latest-build.txt: %s", exc)
+    for _ in range(MAX_GCS_LIST_PAGES):
+        params = {
+            "prefix": f"{GCS_LOG_PREFIX}/{lookup_job}/",
+            "delimiter": "/",
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        list_url = f"{GCS_LIST_URL}?{parse.urlencode(params)}"
+
+        try:
+            with request.urlopen(list_url, timeout=15) as resp:
+                listing = json.loads(resp.read())
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            log.info("Predecessor discovery failed listing GCS builds: %s", exc)
+            return None
+
+        if not isinstance(listing, dict):
+            log.info(
+                "Predecessor discovery got %s instead of a GCS listing",
+                type(listing).__name__,
+            )
+            return None
+
+        prefixes = listing.get("prefixes", [])
+        if isinstance(prefixes, list):
+            for prefix in prefixes:
+                if not isinstance(prefix, str):
+                    continue
+                build_id = prefix.strip("/").rsplit("/", 1)[-1]
+                parsed_build_id = _parse_build_id(build_id)
+                if parsed_build_id is not None and parsed_build_id < current_build_id:
+                    build_ids.add(build_id)
+
+        page_token = listing.get("nextPageToken")
+        if not page_token:
+            break
+    else:
+        log.info(
+            "Predecessor discovery exceeded the %d-page GCS listing limit",
+            MAX_GCS_LIST_PAGES,
+        )
         return None
 
-    if not latest_bid.isdigit():
-        log.info("Predecessor discovery got non-numeric latest-build.txt: %r", latest_bid)
-        return None
+    candidates = sorted(build_ids, key=int, reverse=True)[:MAX_PREDECESSOR_CANDIDATES]
+    for build_id in candidates:
+        try:
+            with request.urlopen(
+                f"{job_base}/{build_id}/finished.json", timeout=15
+            ) as resp:
+                finished = json.loads(resp.read())
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            log.info(
+                "Predecessor discovery skipped build %s with unavailable or invalid "
+                "finished.json: %s",
+                build_id,
+                exc,
+            )
+            continue
 
-    try:
-        with request.urlopen(f"{job_base}/{latest_bid}/finished.json", timeout=15) as resp:
-            finished = json.loads(resp.read())
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        log.info("Predecessor discovery failed reading finished.json for %s: %s", latest_bid, exc)
-        return None
+        if not isinstance(finished, dict) or finished.get("result") != "SUCCESS":
+            result = finished.get("result") if isinstance(finished, dict) else None
+            log.info(
+                "Predecessor build %s did not succeed (result=%s), skipping",
+                build_id,
+                result,
+            )
+            continue
 
-    if finished.get("result") != "SUCCESS":
-        log.info("Predecessor build %s did not succeed (result=%s), skipping",
-                 latest_bid, finished.get("result"))
-        return None
+        gcs_path = f"gs://{GCS_BUCKET}/{GCS_LOG_PREFIX}/{lookup_job}/{build_id}"
+        log.info("Predecessor discovered via GCS: %s", gcs_path)
+        return gcs_path
 
-    gcs_path = f"gs://{GCS_BUCKET}/{GCS_LOG_PREFIX}/{lookup_job}/{latest_bid}"
-    log.info("Predecessor discovered via GCS: %s", gcs_path)
-    return gcs_path
+    if len(candidates) == MAX_PREDECESSOR_CANDIDATES:
+        log.info(
+            "No successful earlier predecessor found among the %d newest candidates "
+            "for %s; candidate limit exhausted",
+            MAX_PREDECESSOR_CANDIDATES,
+            lookup_job,
+        )
+    else:
+        log.info("No successful earlier predecessor found for %s", lookup_job)
+    return None
 
 
 def _rebase_evidence_path(original_path, current_root):
